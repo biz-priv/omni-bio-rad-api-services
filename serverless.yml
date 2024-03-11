@@ -1,0 +1,74 @@
+service: omni-bio-rad-api-services
+
+provider:
+  name: aws
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  versionFunctions: false
+  tags: ${self:custom.tags}
+  stackTags: ${self:custom.tags}
+  runtime: nodejs20.x
+  vpc:
+    securityGroupIds:
+      - ${ssm:/omni-dw/${self:provider.stage}/lambda/sgId}
+    subnetIds:
+      - ${ssm:/omni-dw/${self:provider.stage}/lambda/subnetA}
+  iamRoleStatements:
+    - Effect: 'Allow'
+      Action:
+        - logs:CreateLogGroup
+        - logs:CreateLogStream
+        - logs:PutLogEvents
+        - ec2:CreateNetworkInterface
+        - ec2:DescribeNetworkInterfaces
+        - ec2:DetachNetworkInterface
+        - ec2:DeleteNetworkInterface
+        - ec2:AssignPrivateIpAddresses
+        - ec2:UnassignPrivateIpAddresses
+      Resource: '*'
+    - Effect: Allow
+      Action:
+        - s3:GetObject
+        - s3:ListBucket
+        - s3:PutObject
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:GetItem
+        - dynamodb:Query
+        - dynamodb:DeleteItem
+        - dynamodb:Scan
+        - sqs:GetQueueUrl
+        - sqs:GetQueueAttributes
+        - sqs:ReceiveMessage
+        - sqs:DeleteMessage
+        - sqs:SendMessageBatch
+        - sqs:SendMessage
+        - secretsmanager:*
+        - sns:*
+      Resource: '*'
+  environment:
+    REGION: ${self:custom.region}
+    STAGE: ${opt:stage, 'dev'}
+
+  deploymentBucket:
+    name: ${ssm:/omni-dw/${self:provider.stage}/sls/deployment/bucket}
+    serverSideEncryption: AES256
+
+package:
+  individually: true
+functions:
+  #  lambda's responsible for inserting values from streams to shipment-header table
+  create-shipment: ${file(config/functions/create-shipment.yml):function}
+
+layers:
+  BioRad:
+    path: lambdaLayer/lib
+    name: ${self:service}-layer-${self:provider.stage}
+    description: Omni bio rad api services lambda layer for all node modules - ${self:provider.stage}
+    compatibleRuntimes:
+      - nodejs18.x
+      - nodejs20.x
+    retain: false
+
+plugins:
+  - serverless-layers

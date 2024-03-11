@@ -1,0 +1,50 @@
+{
+  "name": "omni-bio-rad-backend-services",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "lint": "eslint  --ignore-path .gitignore .",
+    "prettier-check": "prettier -c \"**/*.{css,html,js,json,md,yaml,yml}\"",
+    "prettify": "prettier --write \"**/*.{css,html,js,json,md,yaml,yml}\"",
+    "prepare": "husky install"
+  },
+  "author": "",
+  "license": "ISC",
+  "eslintConfig": {
+    "extends": "@serverless/eslint-config/node",
+    "root": true,
+    "ignorePatterns": [
+      "lambdaLayer/lib/nodejs/package.json",
+      "package.json",
+      "serverless.yml"
+    ],
+    "rules": {
+      "no-console": "off",
+      "no-restricted-syntax": [
+        "error",
+        {
+          "selector": "CallExpression[callee.object.name='console'][callee.property.name!=/^(error|info)$/]",
+          "message": "Unexpected property on console object was called"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "aws-sdk": "^2.1163.0",
+    "lodash": "^4.17.21"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^18.4.4",
+    "@commitlint/config-conventional": "^18.4.4",
+    "@serverless/eslint-config": "^5.1.0",
+    "eslint": "^8.56.0",
+    "eslint-plugin-import": "^2.29.1",
+    "git-list-updated": "^1.2.1",
+    "husky": "^8.0.0",
+    "prettier": "^3.1.1",
+    "serverless": "2.72.3",
+    "serverless-layers": "^2.7.0",
+    "serverless-offline": "^8.8.0"
+  }
+}

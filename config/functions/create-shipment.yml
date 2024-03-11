@@ -1,0 +1,13 @@
+---
+function:
+  name: omni-bio-rad-create-shipment-${self:provider.stage}
+  handler: src/create-shipment/index.handler
+  runtime: nodejs20.x
+  timeout: 30
+  layers:
+    - { Ref: BioRadLambdaLayer }
+  package:
+    include:
+      - 'src/create-shipment/**'
+    exclude:
+      - '**/*'
