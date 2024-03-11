@@ -128,3 +128,16 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+.serverless
+node_modules/
+yarn.lock
+Events
+doc
+lambdaLayer/lib/nodejs/yarn.lock
+lambdaLayer/lib/nodejs/package-lock.json
+.DS_Store
+doc.txt
+test.js
+package-lock.json
+infra/.terraform/**
