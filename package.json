@@ -14,11 +14,6 @@
   "eslintConfig": {
     "extends": "@serverless/eslint-config/node",
     "root": true,
-    "ignorePatterns": [
-      "lambdaLayer/lib/nodejs/package.json",
-      "package.json",
-      "serverless.yml"
-    ],
     "rules": {
       "no-console": "off",
       "no-restricted-syntax": [

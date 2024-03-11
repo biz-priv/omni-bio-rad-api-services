@@ -5,7 +5,7 @@ function:
   runtime: nodejs20.x
   timeout: 30
   layers:
-    - { Ref: BioRadLambdaLayer }
+    - { Ref: NodeModulesLambdaLayer }
   package:
     include:
       - 'src/create-shipment/**'

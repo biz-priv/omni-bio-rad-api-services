@@ -69,14 +69,10 @@ functions:
   create-shipment: ${file(config/functions/create-shipment.yml):function}
 
 layers:
-  BioRad:
+  NodeModules:
     path: lambdaLayer/lib
     name: ${self:service}-layer-${self:provider.stage}
     description: Omni bio rad api services lambda layer for all node modules - ${self:provider.stage}
     compatibleRuntimes:
-      - nodejs18.x
       - nodejs20.x
     retain: false
-
-plugins:
-  - serverless-layers
