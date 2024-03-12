@@ -1,0 +1,17 @@
+---
+function:
+  name: omni-bio-rad-cancel-shipment-${self:provider.stage}
+  handler: src/cancel-shipment/index.handler
+  runtime: nodejs20.x
+  timeout: 30
+  layers:
+    - { Ref: NodeModulesLambdaLayer }
+  package:
+    include:
+      - 'src/cancel-shipment/**'
+    exclude:
+      - '**/*'
+  events:
+    - http:
+        path: /LbnFreightOrderForSubcontracting/{orderingPartyLbnId}/{originatorId}/{freightOrderId}/cancellation
+        method: POST

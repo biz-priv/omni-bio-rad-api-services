@@ -11,3 +11,7 @@ function:
       - 'src/create-shipment/**'
     exclude:
       - '**/*'
+  events:
+    - http:
+        path: /LbnFreightOrderForSubcontracting
+        method: POST

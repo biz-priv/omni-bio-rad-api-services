@@ -67,6 +67,8 @@ package:
 functions:
   #  lambda's responsible for inserting values from streams to shipment-header table
   create-shipment: ${file(config/functions/create-shipment.yml):function}
+  update-shipment: ${file(config/functions/update-shipment.yml):function}
+  cancel-shipment: ${file(config/functions/cancel-shipment.yml):function}
 
 layers:
   NodeModules:
