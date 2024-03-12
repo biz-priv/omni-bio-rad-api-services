@@ -10,7 +10,7 @@ module.exports.handler = async (event, context) => {
   const shipperAndConsignee = await prepareShipperAndConsigneeData(event);
   console.info(shipperAndConsignee);
 
-  const shipmentLineList = await prepareShipmentLineListDate(event);
+  const shipmentLineList = await prepareShipmentLineListDate(get(event, 'array', []));
   console.info(shipmentLineList);
 
   return JSON.stringify({
