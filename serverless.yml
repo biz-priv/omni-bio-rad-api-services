@@ -50,6 +50,10 @@ provider:
     REGION: ${self:custom.region}
     STAGE: ${opt:stage, 'dev'}
 
+  apiGateway:
+    apiKeys:
+      - Rf2hL9s4Gp7qW8x
+
   deploymentBucket:
     name: ${ssm:/omni-dw/${self:provider.stage}/sls/deployment/bucket}
     serverSideEncryption: AES256
