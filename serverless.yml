@@ -52,9 +52,9 @@ provider:
 
   apiGateway:
     apiKeys:
-      - Rf2hL9s4Gp7qW8x
-      - name: my-key
-        value: Rf2hL9s4Gp7qW8x
+      - name: x-api-key
+        value: Rf2hL9s4Gp7qW8xRf2hL9s4Gp7qW8x12 ## SSM
+        description: 'API key for bio rad ${self:custom.stage} apis'
 
   deploymentBucket:
     name: ${ssm:/omni-dw/${self:provider.stage}/sls/deployment/bucket}
@@ -64,7 +64,7 @@ custom:
   region: ${opt:region, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
   tags:
-    Application: OmniDataWarehouseBackendServiceIndex
+    Application: OmniBioRadApiServices
     CreateBy: BizCloudExperts
     Environment: ${self:custom.stage}
 

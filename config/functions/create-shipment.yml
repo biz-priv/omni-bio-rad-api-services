@@ -15,3 +15,4 @@ function:
     - http:
         path: /LbnFreightOrderForSubcontracting
         method: POST
+        private: true
