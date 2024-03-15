@@ -49,11 +49,13 @@ provider:
   environment:
     REGION: ${self:custom.region}
     STAGE: ${opt:stage, 'dev'}
+    NOTIFICATION_ARN: ${ssm:/omni/${self:provider.stage}/bio-rad/error-notification/sns/arn}
+    LOGS_TABLE: ${ssm:/omni/${self:provider.stage}/bio-rad/ddb.tableName}
 
   apiGateway:
     apiKeys:
       - name: x-api-key
-        value: Rf2hL9s4Gp7qW8xRf2hL9s4Gp7qW8x12 ## SSM
+        value: ${ssm:/omni/${self:provider.stage}/bio-rad/api-key}
         description: 'API key for bio rad ${self:custom.stage} apis'
 
   deploymentBucket:
