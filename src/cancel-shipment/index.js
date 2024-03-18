@@ -28,10 +28,13 @@ module.exports.handler = async (event, context) => {
 
     const freightOrderId = get(eventBody, 'freightOrderId', '');
     dynamoData.FreightOrderId = freightOrderId;
-    if (freightOrderId === '') {
-      return 'no freightOrderId';
+    if (freightOrderId === '' || freightOrderId === null) {
+      throw new Error('Error, Please provide freightOrderId');
     }
     const housebill = await getHousebill(freightOrderId);
+    if (housebill !== '') {
+      throw new Error(`Error, housebill not found for the given freightOrderId: ${freightOrderId}`);
+    }
     dynamoData.Housebill = housebill;
 
     const xmlString = `<?xml version="1.0" encoding="utf-8"?>
@@ -46,11 +49,7 @@ module.exports.handler = async (event, context) => {
         </soap:Body>
       </soap:Envelope>`;
 
-    const parser = new xml2js.Parser({
-      explicitArray: false,
-      mergeAttrs: true,
-    });
-    const xmlPayload = await parser.parseStringPromise(xmlString);
+    const xmlPayload = await xmlJsonConverter(xmlString);
     dynamoData.XmlPayload = xmlPayload;
 
     const config = {
@@ -65,20 +64,28 @@ module.exports.handler = async (event, context) => {
 
     console.info('config: ', config);
     const res = await axios.request(config);
+    dynamoData.Response = get(res, 'data', '');
     if (get(res, 'status', '') !== 200) {
       console.info(get(res, 'data', ''));
       throw new Error(`API Request Failed: ${res}`);
     }
-    dynamoData.Response = get(res, 'data', '');
+
+    // Verify if the WT api request is success or failed
+    const response = await xmlJsonConverter(dynamoData.Response)
+    let message = response['soap:Envelope']['soap:Body'].UpdateStatusResponse.UpdateStatusResult;
+    if(message === 'true'){
+      message = 'Success'
+    } else {
+      message = 'Failed'
+    }
 
     await putItem(dynamoData);
-
     return {
       statusCode: 200,
       body: JSON.stringify(
         {
           responseId: dynamoData.Id,
-          message: 'Success',
+          message,
         },
         null,
         2
@@ -87,18 +94,29 @@ module.exports.handler = async (event, context) => {
   } catch (error) {
     console.error('Main lambda error: ', error);
 
-    try {
+    let errorMsgVal = '';
+    if (get(error, 'message', null) !== null) {
+      errorMsgVal = get(error, 'message', '');
+    } else {
+      errorMsgVal = error;
+    }
+    const flag = errorMsgVal.split(',')[0];
+    if (flag !== 'Error') {
       const params = {
         Message: `An error occurred in function ${context.functionName}.\n\nERROR DETAILS: ${error}.\n\nId: ${get(dynamoData, 'Id', '')}.\n\nEVENT: ${JSON.stringify(event)}.\n\nNote: Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${'log table'} for understanding the complete data.`,
         Subject: `Bio Rad Cancel Shipment ERROR ${context.functionName}`,
         TopicArn: process.env.NOTIFICATION_ARN,
       };
-      await sns.publish(params).promise();
-      console.info('SNS notification has sent');
-    } catch (err) {
-      console.error('Error while sending sns notification: ', err);
+      try {
+        await sns.publish(params).promise();
+        console.info('SNS notification has sent');
+      } catch (err) {
+        console.error('Error while sending sns notification: ', err);
+      }
+    } else {
+      errorMsgVal = errorMsgVal.split(',').slice(1);
     }
-    dynamoData.ErrorMsg = `${error}`;
+    dynamoData.ErrorMsg = errorMsgVal;
     dynamoData.Status = 'FAILED';
     await putItem(dynamoData);
     return {
@@ -116,33 +134,54 @@ module.exports.handler = async (event, context) => {
 };
 
 async function getHousebill(referenceNo) {
-  const referenceParams = {
-    TableName: process.env.REFERENCE_TABLE,
-    IndexName: 'referenceNo-refTypeId-index',
-    KeyConditionExpression: 'ReferenceNo = :ReferenceNo and FK_RefTypeId = :FK_RefTypeId',
-    ExpressionAttributeValues: {
-      ':ReferenceNo': referenceNo,
-      ':FK_RefTypeId': 'SID',
-    },
-  };
+  try {
+    const referenceParams = {
+      TableName: process.env.REFERENCE_TABLE,
+      IndexName: 'referenceNo-refTypeId-index',
+      KeyConditionExpression: 'ReferenceNo = :ReferenceNo and FK_RefTypeId = :FK_RefTypeId',
+      ExpressionAttributeValues: {
+        ':ReferenceNo': referenceNo,
+        ':FK_RefTypeId': 'SID',
+      },
+    };
 
-  const referenceResult = await getData(referenceParams);
-  const orderNo = get(referenceResult, '[0].FK_OrderNo', '');
+    const referenceResult = await getData(referenceParams);
+    const orderNo = get(referenceResult, '[0].FK_OrderNo', '');
+    if (orderNo === '') {
+      throw new Error(`Error, Order number not found for the given freightOrderId: ${referenceNo}`);
+    }
 
-  const headerParams = {
-    TableName: process.env.SHIPMENT_HEADER_TABLE,
-    KeyConditionExpression: 'PK_OrderNo = :PK_OrderNo',
-    ExpressionAttributeValues: {
-      ':PK_OrderNo': orderNo,
-    },
-  };
+    const headerParams = {
+      TableName: process.env.SHIPMENT_HEADER_TABLE,
+      KeyConditionExpression: 'PK_OrderNo = :PK_OrderNo',
+      ExpressionAttributeValues: {
+        ':PK_OrderNo': orderNo,
+      },
+    };
 
-  const headerResult = await getData(headerParams);
-  const housebillArray = get(headerResult, 'Items', []).filter((obj) =>
-    ['NEW', 'WEB'].includes(obj.FK_OrderStatusId)
-  );
+    const headerResult = await getData(headerParams);
+    const housebillArray = get(headerResult, 'Items', []).filter((obj) =>
+      ['NEW', 'WEB'].includes(obj.FK_OrderStatusId)
+    );
 
-  return get(housebillArray, '[0].Housebill', '');
+    return get(housebillArray, '[0].Housebill', '');
+  } catch (error) {
+    console.error('Error while fetching housebill');
+    throw error;
+  }
+}
+
+async function xmlJsonConverter(xmlData) {
+  try {
+    const parser = new xml2js.Parser({
+      explicitArray: false,
+      mergeAttrs: true,
+    });
+    return await parser.parseStringPromise(xmlData);
+  } catch (error) {
+    console.error('Error in xmlToJson: ', error);
+    throw error;
+  }
 }
 
 async function getData(params) {
