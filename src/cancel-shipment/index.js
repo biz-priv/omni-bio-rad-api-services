@@ -2,12 +2,12 @@
 
 const AWS = require('aws-sdk');
 const { get } = require('lodash');
-const xml2js = require('xml2js');
 const axios = require('axios');
 const uuid = require('uuid');
 const moment = require('moment-timezone');
+const { putLogItem, getData } = require('../Shared/dynamo');
+const { xmlJsonConverter } = require('../Shared/dataHelper');
 
-const ddb = new AWS.DynamoDB.DocumentClient();
 const sns = new AWS.SNS();
 
 const dynamoData = {};
@@ -23,6 +23,7 @@ module.exports.handler = async (event, context) => {
     dynamoData.Event = event;
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
     dynamoData.Process = 'CANCEL';
+    dynamoData.XmlPayload = {};
 
     const eventBody = get(event, 'body', {});
 
@@ -31,61 +32,35 @@ module.exports.handler = async (event, context) => {
     if (freightOrderId === '' || freightOrderId === null) {
       throw new Error('Error, Please provide freightOrderId');
     }
-    const housebill = await getHousebill(freightOrderId);
-    if (housebill !== '') {
+    const housebillArray = await getHousebills(freightOrderId);
+    if (housebillArray.length === 0) {
       throw new Error(`Error, housebill not found for the given freightOrderId: ${freightOrderId}`);
     }
-    dynamoData.Housebill = housebill;
+    dynamoData.HousebillArray = housebillArray;
 
-    const xmlString = `<?xml version="1.0" encoding="utf-8"?>
-      <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-        <soap:Body>
-          <UpdateStatus xmlns="http://tempuri.org/">
-          <HandlingStation></HandlingStation>
-          <HAWB>${housebill}</HAWB>
-          <UserName>saplbn</UserName>
-          <StatusCode>CAN</StatusCode>
-          </UpdateStatus>
-        </soap:Body>
-      </soap:Envelope>`;
+    const skippedHousebills = [];
+    const responses = {};
+    await Promise.all(
+      housebillArray.map(async (housebill) => {
+        if (skippedHousebills.includes(housebill)) {
+          return;
+        }
+        skippedHousebills.push(housebill);
+        const result = await addMilestoneApiCall(housebill);
+        responses[housebill] = result;
+      })
+    );
+    dynamoData.Responses = responses;
 
-    const xmlPayload = await xmlJsonConverter(xmlString);
-    dynamoData.XmlPayload = xmlPayload;
+    console.info(dynamoData);
 
-    const config = {
-      url: process.env.ADD_MILESTONE_URL,
-      method: 'post',
-      headers: {
-        'Accept': 'text/xml',
-        'Content-Type': 'text/xml',
-      },
-      data: xmlPayload,
-    };
-
-    console.info('config: ', config);
-    const res = await axios.request(config);
-    dynamoData.Response = get(res, 'data', '');
-    if (get(res, 'status', '') !== 200) {
-      console.info(get(res, 'data', ''));
-      throw new Error(`API Request Failed: ${res}`);
-    }
-
-    // Verify if the WT api request is success or failed
-    const response = await xmlJsonConverter(dynamoData.Response)
-    let message = response['soap:Envelope']['soap:Body'].UpdateStatusResponse.UpdateStatusResult;
-    if(message === 'true'){
-      message = 'Success'
-    } else {
-      message = 'Failed'
-    }
-
-    await putItem(dynamoData);
+    await putLogItem(dynamoData);
     return {
       statusCode: 200,
       body: JSON.stringify(
         {
           responseId: dynamoData.Id,
-          message,
+          message: 'Success',
         },
         null,
         2
@@ -118,7 +93,7 @@ module.exports.handler = async (event, context) => {
     }
     dynamoData.ErrorMsg = errorMsgVal;
     dynamoData.Status = 'FAILED';
-    await putItem(dynamoData);
+    await putLogItem(dynamoData);
     return {
       statusCode: 400,
       body: JSON.stringify(
@@ -133,11 +108,12 @@ module.exports.handler = async (event, context) => {
   }
 };
 
-async function getHousebill(referenceNo) {
+async function getHousebills(referenceNo) {
   try {
+    // get all the order no for provided reference no
     const referenceParams = {
       TableName: process.env.REFERENCE_TABLE,
-      IndexName: 'referenceNo-refTypeId-index',
+      IndexName: 'ReferenceNo-FK_RefTypeId-index',
       KeyConditionExpression: 'ReferenceNo = :ReferenceNo and FK_RefTypeId = :FK_RefTypeId',
       ExpressionAttributeValues: {
         ':ReferenceNo': referenceNo,
@@ -146,67 +122,83 @@ async function getHousebill(referenceNo) {
     };
 
     const referenceResult = await getData(referenceParams);
-    const orderNo = get(referenceResult, '[0].FK_OrderNo', '');
-    if (orderNo === '') {
+    if (referenceResult.length === 0) {
       throw new Error(`Error, Order number not found for the given freightOrderId: ${referenceNo}`);
     }
 
-    const headerParams = {
-      TableName: process.env.SHIPMENT_HEADER_TABLE,
-      KeyConditionExpression: 'PK_OrderNo = :PK_OrderNo',
-      ExpressionAttributeValues: {
-        ':PK_OrderNo': orderNo,
-      },
-    };
+    // get all the housebill from the above order nos
+    let housebillArray = [];
+    await Promise.all(
+      referenceResult.map(async (orderData) => {
+        const headerParams = {
+          TableName: process.env.SHIPMENT_HEADER_TABLE,
+          KeyConditionExpression: 'PK_OrderNo = :PK_OrderNo',
+          ExpressionAttributeValues: {
+            ':PK_OrderNo': get(orderData, 'FK_OrderNo', ''),
+          },
+        };
+        const headerResult = await getData(headerParams);
+        const filteredArray = headerResult
+          .filter((obj) => ['WEB'].includes(obj.FK_OrderStatusId) && obj.Housebill)
+          .map((obj) => obj.Housebill);
 
-    const headerResult = await getData(headerParams);
-    const housebillArray = get(headerResult, 'Items', []).filter((obj) =>
-      ['NEW', 'WEB'].includes(obj.FK_OrderStatusId)
+        housebillArray = [...housebillArray, ...filteredArray];
+      })
     );
 
-    return get(housebillArray, '[0].Housebill', '');
+    return housebillArray;
   } catch (error) {
     console.error('Error while fetching housebill');
     throw error;
   }
 }
 
-async function xmlJsonConverter(xmlData) {
+async function addMilestoneApiCall(housebill) {
   try {
-    const parser = new xml2js.Parser({
-      explicitArray: false,
-      mergeAttrs: true,
-    });
-    return await parser.parseStringPromise(xmlData);
-  } catch (error) {
-    console.error('Error in xmlToJson: ', error);
-    throw error;
-  }
-}
+    const xmlString = `<?xml version="1.0" encoding="utf-8"?>
+    <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+      <soap:Body>
+        <UpdateStatus xmlns="http://tempuri.org/">
+        <HandlingStation></HandlingStation>
+        <HAWB>${housebill}</HAWB>
+        <UserName>saplbn</UserName>
+        <StatusCode>CAN</StatusCode>
+        </UpdateStatus>
+      </soap:Body>
+    </soap:Envelope>`;
+    dynamoData.XmlPayload[housebill] = xmlString;
 
-async function getData(params) {
-  try {
-    const data = await ddb.query(params).promise();
-    console.info('Query succeeded:', data);
-    return get(data, 'Items', []);
-  } catch (err) {
-    console.info('getStationId:', err);
-    throw err;
-  }
-}
-
-async function putItem(item) {
-  let params;
-  try {
-    params = {
-      TableName: process.env.LOGS_TABLE,
-      Item: item,
+    const config = {
+      url: process.env.ADD_MILESTONE_URL,
+      method: 'post',
+      headers: {
+        'Accept': 'text/xml',
+        'Content-Type': 'text/xml',
+      },
+      data: xmlString,
     };
-    console.info('Insert Params: ', params);
-    const dynamoInsert = await ddb.put(params).promise();
-    return dynamoInsert;
+
+    console.info('config: ', config);
+
+    const res = await axios.request(config);
+    let message = '';
+    if (get(res, 'status', '') !== 200) {
+      console.info(get(res, 'data', ''));
+      throw new Error(`API Request Failed: ${res}`);
+    } else {
+      // Verify if the WT api request is success or failed
+      const response = await xmlJsonConverter(get(res, 'data', ''));
+      message = response['soap:Envelope']['soap:Body'].UpdateStatusResponse.UpdateStatusResult;
+      console.info('message: ', message);
+      if (message === 'true') {
+        message = 'Success';
+      } else {
+        message = 'Failed';
+      }
+    }
+    return { message, housebill };
   } catch (error) {
-    console.error('Put Item Error: ', error, '\nPut params: ', params);
-    throw error;
+    console.error(`For ${housebill} API request failed: `, error);
+    return { message: error, housebill };
   }
 }
