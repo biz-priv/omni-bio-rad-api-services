@@ -188,7 +188,7 @@ async function addMilestoneApiCall(housebill) {
     } else {
       // Verify if the WT api request is success or failed
       const response = await xmlJsonConverter(get(res, 'data', ''));
-      message = response['soap:Envelope']['soap:Body'].UpdateStatusResponse.UpdateStatusResult;
+      message = get(response, 'soap:Envelope.soap:Body.UpdateStatusResponse.UpdateStatusResult', '');
       console.info('message: ', message);
       if (message === 'true') {
         message = 'Success';
