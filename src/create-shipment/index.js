@@ -28,9 +28,10 @@ module.exports.handler = async (event, context) => {
     dynamoData.Process = 'CANCEL';
     dynamoData.XmlPayload = {};
     dynamoData.FreightOrderId = get(eventBody, 'freightOrderId', '');
+    dynamoData.CarrierPartyLbnId = get(eventBody, 'carrierPartyLbnId', '');
     dynamoData.CallInPhone = `${get(eventBody, 'orderingParty.address.phoneNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.phoneNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.phoneNumber.subscriberId', '')}`;
     dynamoData.CallInFax = `${get(eventBody, 'orderingParty.address.faxNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.faxNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.faxNumber.subscriberId', '')}`;
-    dynamoData.QuoteContactEmail = get(eventBody, 'orderingParty.address.emailAddress', '')
+    dynamoData.QuoteContactEmail = get(eventBody, 'orderingParty.address.emailAddress', '');
 
     console.info(dynamoData.CSTDateTime);
 
@@ -39,6 +40,8 @@ module.exports.handler = async (event, context) => {
 
     const transportationStages = get(eventBody, 'transportationStages', []);
     const items = get(eventBody, 'items', []);
+
+    // Prepare payload and create shipments in world trak.
     const apiResponses = await Promise.all(
       transportationStages.map(async (stage) => {
         try {
@@ -111,14 +114,10 @@ module.exports.handler = async (event, context) => {
     );
     console.info(apiResponses);
 
+    const eventArray = ['sendToLbn', 'updateDb'];
     const finalResponses = await Promise.all(
-      apiResponses.map(async (response) => {
-        const eventArray = ['sendToLbn', 'updateDb'];
-        await Promise.all(
-          eventArray.map(async (eventType) => {
-            await sendToLbnAndUpdateInSourceDb(eventType, response);
-          })
-        );
+      eventArray.map(async (eventType) => {
+        await sendToLbnAndUpdateInSourceDb(eventType, apiResponses);
       })
     );
 
@@ -409,21 +408,35 @@ async function prepareDateValues(data) {
   }
 }
 
-async function sendToLbnAndUpdateInSourceDb(eventType, response) {
+async function sendToLbnAndUpdateInSourceDb(eventType, responses) {
   try {
-    const fileNumberArray = response.map((obj) => obj.fileNumber);
+    const fileNumberArray = responses.map((obj) => obj.fileNumber);
     console.info('fileNumberArray: ', fileNumberArray);
     if (eventType === 'updateDb') {
       const updateQuery = `update tbl_shipmentheader set
-      CallInPhone='1 650 555-1212',
-      CallInFax='',
-      QuoteContactEmail='nobody@nowhere.com'
+      CallInPhone=${get(dynamoData, 'CallInPhone', '')},
+      CallInFax=${get(dynamoData, 'CallInFax', '')},
+      QuoteContactEmail=${get(dynamoData, 'QuoteContactEmail', '')}
       where fk_orderno in (${fileNumberArray.join(',')});`;
 
       console.info('getQuery: ', updateQuery);
       const request = await connectToSQLServer();
       const result = await request.query(updateQuery);
       console.info(result);
+    } else {
+      const businessDocumentReferences = responses.map(async (response) => {
+        return {
+          documentId: get(response, 'housebill', ''),
+          documentTypeCode: 'T51',
+        };
+      });
+      const payload = {
+        carrierPartyLbnId: get(dynamoData, 'CarrierPartyLbnId', ''),
+        confirmationStatus: 'CAN',
+        businessDocumentReferences,
+      };
+
+      await sendToLbn(payload);
     }
   } catch (error) {
     console.error(error);
@@ -435,7 +448,7 @@ async function connectToSQLServer() {
     user: process.env.DB_USERNAME,
     password: process.env.DB_PASSWORD,
     server: process.env.DB_SERVER,
-    port: parseInt(process.env.DB_PORT),
+    port: Number(process.env.DB_PORT),
     database: process.env.DB_DATABASE,
     options: {
       trustServerCertificate: true, // For self-signed certificates (optional)
@@ -450,5 +463,28 @@ async function connectToSQLServer() {
   } catch (err) {
     console.error('Error: ', err);
     throw err;
+  }
+}
+
+async function sendToLbn(payload) {
+  try {
+    const config = {
+      url: process.env.WT_URL,
+      method: 'post',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      data: payload,
+    };
+
+    console.info('config: ', config);
+    const res = await axios.request(config);
+    if (get(res, 'status', '') === 200) {
+      return get(res, 'data', '');
+    }
+    throw new Error(`WORLD TRAK API Request Failed: ${res}`);
+  } catch (error) {
+    console.error('WORLD TRAK API Request Failed: ', error);
+    throw error;
   }
 }
