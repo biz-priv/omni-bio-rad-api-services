@@ -6,11 +6,11 @@ function:
   timeout: 30
   layers:
     - { Ref: NodeModulesLambdaLayer }
-  package:
-    patterns:
-      - '!**/*'
-      - src/create-shipment/**
-      - src/shared/**
+  # package:
+  #   patterns:
+  #     - '!**/*'
+  #     - src/create-shipment/**
+  #     - src/shared/**
   events:
     - http:
         path: /LbnFreightOrderForSubcontracting
