@@ -6,14 +6,9 @@ function:
   timeout: 30
   layers:
     - { Ref: NodeModulesLambdaLayer }
-  # package:
-  #   include:
-  #     - 'src/create-shipment/**'
-  #     - 'src/shared/**'
-  #   exclude:
-  #     - '**/*'
   package:
     patterns:
+      - '!**/*'
       - src/create-shipment/**
       - src/shared/**
   events:
