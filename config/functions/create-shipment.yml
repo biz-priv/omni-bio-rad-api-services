@@ -14,9 +14,8 @@ function:
   #     - '**/*'
   package:
     patterns:
-      - "!**/*"
-      - 'src/create-shipment/**'
-      - 'src/shared/**'
+      - src/create-shipment/**
+      - src/shared/**
   events:
     - http:
         path: /LbnFreightOrderForSubcontracting
