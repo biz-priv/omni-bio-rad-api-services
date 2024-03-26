@@ -5,8 +5,8 @@ const AWS = require('aws-sdk');
 const axios = require('axios');
 const uuid = require('uuid');
 const moment = require('moment-timezone');
-const { putLogItem } = require('../Shared/dynamo');
-const { xmlJsonConverter, connectToSQLServer } = require('../Shared/dataHelper');
+const { putLogItem } = require('../shared/dynamo');
+const { xmlJsonConverter, connectToSQLServer } = require('../shared/dataHelper');
 const {
   prepareHeaderData,
   prepareShipperAndConsigneeData,
@@ -20,7 +20,7 @@ const sns = new AWS.SNS();
 const dynamoData = {};
 
 module.exports.handler = async (event, context) => {
-  // console.info(event);
+  console.info(event);
 
   try {
     const eventBody = get(event, 'body', {});
@@ -271,7 +271,7 @@ async function getLbnToken() {
 async function sendToLbn(token, payload) {
   try {
     const config = {
-      url: `${process.env.LBN_SEND_URL}/${dynamoData.OrderingPartyLbnId}/${dynamoData.OriginatorId}/${dynamoData.FreightOrderId}/carrierResponse`,
+      url: `${process.env.LBN_SEND_URL}/${get(dynamoData, 'OrderingPartyLbnId')}/${get(dynamoData, 'OriginatorId')}/${get(dynamoData, 'FreightOrderId')}/carrierResponse`,
       method: 'post',
       headers: {
         'Content-Type': 'application/json',

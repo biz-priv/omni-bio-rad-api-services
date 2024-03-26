@@ -9,7 +9,7 @@ function:
   package:
     include:
       - 'src/create-shipment/**'
-      - 'src/Shared/**'
+      - 'src/shared/**'
     exclude:
       - '**/*'
   events:
