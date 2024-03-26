@@ -10,7 +10,7 @@ function:
     patterns:
       - '!**/*'
       - src/create-shipment/**
-      - src/shared/**
+      - src/Shared/**
   events:
     - http:
         path: /LbnFreightOrderForSubcontracting

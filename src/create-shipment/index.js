@@ -5,8 +5,8 @@ const AWS = require('aws-sdk');
 const axios = require('axios');
 const uuid = require('uuid');
 const moment = require('moment-timezone');
-const { putLogItem } = require('../shared/dynamo');
-const { xmlJsonConverter, connectToSQLServer } = require('../shared/dataHelper');
+const { putLogItem } = require('../Shared/dynamo');
+const { xmlJsonConverter, connectToSQLServer } = require('../Shared/dataHelper');
 const {
   prepareHeaderData,
   prepareShipperAndConsigneeData,
