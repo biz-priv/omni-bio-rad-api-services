@@ -23,3 +23,8 @@ function:
     DB_SERVER: ${ssm:/omni-dw/${self:provider.stage}/worldTrak/source-db/serverName}
     DB_PORT: ${ssm:/omni-dw/${self:provider.stage}/worldTrak/source-db/port}
     DB_DATABASE: ${ssm:/omni-dw/${self:provider.stage}/worldTrak/source-db/name}
+    LBN_SEND_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-send-endpoint}
+    LBN_TOKEN_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint}
+    LBN_TOKEN_USERNAME: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/username}
+    LBN_TOKEN_PASSWORD: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/password}
+    LBN_TOKEN_AUTHORIZATION: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/authorization}
