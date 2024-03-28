@@ -28,6 +28,12 @@ const CONSTANTS = {
     CA: '8061',
     US: '8062',
   },
+  grossWeight: {
+    LBR: 'lb',
+  },
+  DimUOMV3: {
+    INH: 'in',
+  },
 };
 
 async function prepareHeaderData(eventBody) {
@@ -96,17 +102,23 @@ async function prepareShipmentLineListDate(data, id) {
 
   const shipmentList = await Promise.all(
     items.map(async (item) => {
+      let hazmatValue = 0;
+      if (get(item, 'dangerousGoods', '') === false) {
+        hazmatValue = 0;
+      } else {
+        hazmatValue = 1;
+      }
       return {
         PieceType: get(item, 'packageTypeCode', ''),
         Description: get(item, 'description', '').slice(0, 35),
-        Hazmat: 0,
+        Hazmat: hazmatValue,
         Weigth: get(item, 'grossWeight.value', 0),
-        WeightUOMV3: 'lb',
+        WeightUOMV3: get(CONSTANTS, `${get(item, 'grossWeight.unit', '')}`, 'lb'),
         Pieces: get(item, 'pieces.value', 0),
-        Length: 15,
-        DimUOMV3: 'in',
-        Width: 16,
-        Height: 17,
+        Length: get(item, 'length.value', 0),
+        DimUOMV3: get(CONSTANTS, `${get(item, 'length.unit', '')}`, 'in'),
+        Width: get(item, 'width.value', 0),
+        Height: get(item, 'height.value', 0),
       };
     })
   );

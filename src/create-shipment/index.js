@@ -6,7 +6,7 @@ const axios = require('axios');
 const uuid = require('uuid');
 const moment = require('moment-timezone');
 const { putLogItem } = require('../Shared/dynamo');
-const { xmlJsonConverter, connectToSQLServer } = require('../Shared/dataHelper');
+const { xmlJsonConverter } = require('../Shared/dataHelper');
 const {
   prepareHeaderData,
   prepareShipperAndConsigneeData,
@@ -54,19 +54,19 @@ module.exports.handler = async (event, context) => {
       transportationStages.map(async (stage) => {
         try {
           const shipperAndConsignee = await prepareShipperAndConsigneeData(stage);
-          console.info(shipperAndConsignee);
+          // console.info(shipperAndConsignee);
 
           const referenceList = await prepareReferenceList(stage, eventBody);
-          console.info(JSON.stringify(referenceList));
+          // console.info(JSON.stringify(referenceList));
 
           const shipmentLineList = await prepareShipmentLineListDate(
             items,
             get(stage, 'assignedItems', [])
           );
-          console.info(JSON.stringify(shipmentLineList));
+          // console.info(JSON.stringify(shipmentLineList));
 
           const dateValues = await prepareDateValues(stage);
-          console.info(dateValues);
+          // console.info(dateValues);
 
           const xmlPayload = await prepareWTPayload(
             headerData,
@@ -76,7 +76,6 @@ module.exports.handler = async (event, context) => {
             dateValues
           );
           console.info(xmlPayload);
-
           const xmlResponse = await sendToWT(xmlPayload);
 
           const xmlObjResponse = await xmlJsonConverter(xmlResponse);
@@ -216,10 +215,8 @@ async function sendToLbnAndUpdateInSourceDb(eventType, responses) {
       QuoteContactEmail=${get(dynamoData, 'QuoteContactEmail', '')}
       where fk_orderno in (${fileNumberArray.join(',')});`;
 
-      console.info('getQuery: ', updateQuery);
-      const request = await connectToSQLServer();
-      const result = await request.query(updateQuery);
-      console.info(result);
+      const apiResult = await updateDb(updateQuery);
+      console.info(apiResult);
     } else {
       const token = await getLbnToken();
       const businessDocumentReferences = responses.map((response) => {
@@ -288,6 +285,31 @@ async function sendToLbn(token, payload) {
     throw new Error(`Lbn main API Request Failed: ${res}`);
   } catch (error) {
     console.error('Lbn main API Request Failed: ', error);
+    throw error;
+  }
+}
+
+async function updateDb(updateQuery) {
+  try {
+    const config = {
+      method: 'post',
+      maxBodyLength: Infinity,
+      url: process.env.UPDATE_SOURCE_DB_URL,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.UPDATE_SOURCE_DB_API_KEY,
+      },
+      data: { query: updateQuery },
+    };
+
+    console.info('config: ', config);
+    const res = await axios.request(config);
+    if (get(res, 'status', '') === 200) {
+      return get(res, 'data', '');
+    }
+    throw new Error(`Update source API Request Failed: ${res}`);
+  } catch (error) {
+    console.error('Update source API Request Failed: ', error);
     throw error;
   }
 }

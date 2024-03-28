@@ -4,25 +4,39 @@ const sql = require('mssql');
 const { get } = require('lodash');
 
 module.exports.handler = async (event) => {
-  console.info(event);
+  try {
+    console.info(event);
 
-  const eventBody = JSON.parse(get(event, 'body', {}))
-  const query = eventBody.query;
-  console.info('getQuery: ', query);
-  const request = await connectToSQLServer();
-  const result = await request.query(query);
+    const eventBody = JSON.parse(get(event, 'body', {}));
+    const query = eventBody.query;
+    console.info('getQuery: ', query);
+    const request = await connectToSQLServer();
+    const result = await request.query(query);
 
-  console.info(result);
-  return {
-    statusCode: 200,
-    body: JSON.stringify(
-      {
-        Message: 'Success',
-      },
-      null,
-      2
-    ),
-  };
+    console.info(result);
+    return {
+      statusCode: 200,
+      body: JSON.stringify(
+        {
+          Message: 'Success',
+        },
+        null,
+        2
+      ),
+    };
+  } catch (error) {
+    console.error('Error in handler: ', error);
+    return {
+      statusCode: 400,
+      body: JSON.stringify(
+        {
+          Message: 'Failed',
+        },
+        null,
+        2
+      ),
+    };
+  }
 };
 
 async function connectToSQLServer() {
