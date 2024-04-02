@@ -33,6 +33,7 @@ const CONSTANTS = {
   },
   DimUOMV3: {
     INH: 'in',
+    CMT: 'cm'
   },
 };
 
@@ -67,7 +68,7 @@ async function prepareShipperAndConsigneeData(data) {
     ConsigneePhone: `+${get(data, 'unloadingLocation.address.phoneNumber.countryDialingCode', '')} ${get(data, 'unloadingLocation.address.phoneNumber.areaId', '')} ${get(data, 'unloadingLocation.address.phoneNumber.subscriberId', '')}`,
     ConsigneeFax: get(data, 'unloadingLocation.address.faxNumber.subscriberId', ''),
     ConsigneeEmail: get(data, 'unloadingLocation.address.emailAddress', ''),
-    BillNo: get(CONSTANTS, `billNo.${get(data, 'unloadingLocation.address.country', '')}`, '8061'),
+    BillToAcct: get(CONSTANTS, `billNo.${get(data, 'unloadingLocation.address.country', '')}`, '8061'),
     Station: get(CONSTANTS, `station.${get(data, 'loadingLocation.address.country', '')}`, 'SFO'),
   };
 }
@@ -97,9 +98,7 @@ async function prepareReferenceList(data, eventBody) {
   return referenceList;
 }
 
-async function prepareShipmentLineListDate(data, id) {
-  const items = data.filter((item) => id.includes(item.id));
-
+async function prepareShipmentLineListDate(items) {
   const shipmentList = await Promise.all(
     items.map(async (item) => {
       let hazmatValue = 0;
@@ -113,10 +112,10 @@ async function prepareShipmentLineListDate(data, id) {
         Description: get(item, 'description', '').slice(0, 35),
         Hazmat: hazmatValue,
         Weigth: get(item, 'grossWeight.value', 0),
-        WeightUOMV3: get(CONSTANTS, `${get(item, 'grossWeight.unit', '')}`, 'lb'),
+        WeightUOMV3: get(CONSTANTS, `grossWeight.${get(item, 'grossWeight.unit', '')}`, 'lb'),
         Pieces: get(item, 'pieces.value', 0),
         Length: get(item, 'length.value', 0),
-        DimUOMV3: get(CONSTANTS, `${get(item, 'length.unit', '')}`, 'in'),
+        DimUOMV3: get(CONSTANTS, `DimUOMV3.${get(item, 'length.unit', '')}`, 'in'),
         Width: get(item, 'width.value', 0),
         Height: get(item, 'height.value', 0),
       };
@@ -131,7 +130,6 @@ async function prepareShipmentLineListDate(data, id) {
 
 async function prepareDateValues(data) {
   try {
-    const serviceLevel = moment.duration(get(data, 'totalDuration.value', 'PT0S')).asHours();
     const readyDate = moment
       .utc(get(data, 'requestedLoadingTimeStart'))
       .add(get(CONSTANTS, `timeAway.${get(data, 'loadingLocationTimezone', 'CST')}`, 0), 'hours')
@@ -149,7 +147,6 @@ async function prepareDateValues(data) {
       .add(get(CONSTANTS, `timeAway.${get(data, 'unloadingLocationTimezone', 'CST')}`, 0), 'hours')
       .format('YYYY-MM-DDTHH:mm:ss-00:00');
     return {
-      ServiceLevel: serviceLevel,
       ReadyDate: readyDate,
       ReadyTime: readyDate,
       CloseTime: closeTime,

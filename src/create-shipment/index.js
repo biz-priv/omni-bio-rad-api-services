@@ -25,6 +25,8 @@ module.exports.handler = async (event, context) => {
   try {
     const eventBody = JSON.parse(get(event, 'body', {}));
 
+    // const eventBody = get(event, 'body', {});
+
     // Set the time zone to CST
     const cstDate = moment().tz('America/Chicago');
     dynamoData.CSTDate = cstDate.format('YYYY-MM-DD');
@@ -49,77 +51,86 @@ module.exports.handler = async (event, context) => {
     const transportationStages = get(eventBody, 'transportationStages', []);
     const items = get(eventBody, 'items', []);
 
-    // Prepare payload and create shipments in world trak.
+    const groupedItems = await groupItems(items);
+    console.info(groupedItems);
+    const groupedItemKeys = Object.keys(groupedItems);
     const apiResponses = await Promise.all(
-      transportationStages.map(async (stage) => {
-        try {
-          const shipperAndConsignee = await prepareShipperAndConsigneeData(stage);
-          // console.info(shipperAndConsignee);
+      groupedItemKeys.map(async (key) => {
+        const stage = transportationStages.find(
+          (obj) =>
+            get(obj, 'loadingLocation.id', '') === key.split('-')[0] &&
+            get(obj, 'unloadingLocation.id', '') === key.split('-')[1]
+        );
+        const shipperAndConsignee = await prepareShipperAndConsigneeData(stage);
+        console.info(shipperAndConsignee);
 
-          const referenceList = await prepareReferenceList(stage, eventBody);
-          // console.info(JSON.stringify(referenceList));
+        const referenceList = await prepareReferenceList(stage, eventBody);
+        console.info(JSON.stringify(referenceList));
 
-          const shipmentLineList = await prepareShipmentLineListDate(
-            items,
-            get(stage, 'assignedItems', [])
+        const shipmentLineList = await prepareShipmentLineListDate(get(groupedItems, key, []));
+        console.info(JSON.stringify(shipmentLineList));
+
+        const dateValues = await prepareDateValues(stage);
+        console.info(dateValues);
+
+        let totalDuration = get(stage, 'totalDuration.value', '');
+        if (totalDuration === '') {
+          totalDuration = await getTotalDuration(
+            transportationStages,
+            get(stage, 'loadingLocation.id', ''),
+            get(stage, 'unloadingLocation.id', '')
           );
-          // console.info(JSON.stringify(shipmentLineList));
+        }
+        console.info(totalDuration);
 
-          const dateValues = await prepareDateValues(stage);
-          // console.info(dateValues);
+        const xmlPayload = await prepareWTPayload(
+          headerData,
+          shipperAndConsignee,
+          referenceList,
+          shipmentLineList,
+          dateValues
+        );
+        console.info(xmlPayload);
 
-          const xmlPayload = await prepareWTPayload(
-            headerData,
-            shipperAndConsignee,
-            referenceList,
-            shipmentLineList,
-            dateValues
-          );
-          console.info(xmlPayload);
-          const xmlResponse = await sendToWT(xmlPayload);
+        const xmlResponse = await sendToWT(xmlPayload);
 
-          const xmlObjResponse = await xmlJsonConverter(xmlResponse);
+        const xmlObjResponse = await xmlJsonConverter(xmlResponse);
 
-          if (
-            get(
-              xmlObjResponse,
-              'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.ErrorMessage',
-              ''
-            ) !== '' ||
-            get(
-              xmlObjResponse,
-              'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.Housebill',
-              ''
-            ) === ''
-          ) {
-            throw new Error(
-              `WORLD TRAK API call failed: ${get(
-                xmlObjResponse,
-                'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.ErrorMessage',
-                ''
-              )}`
-            );
-          }
-
-          const housebill = get(
+        if (
+          get(
+            xmlObjResponse,
+            'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.ErrorMessage',
+            ''
+          ) !== '' ||
+          get(
             xmlObjResponse,
             'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.Housebill',
             ''
+          ) === ''
+        ) {
+          throw new Error(
+            `WORLD TRAK API call failed: ${get(
+              xmlObjResponse,
+              'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.ErrorMessage',
+              ''
+            )}`
           );
-          const fileNumber = get(
-            xmlObjResponse,
-            'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.ShipQuoteNo',
-            ''
-          );
-          return { housebill, fileNumber };
-        } catch (error) {
-          console.info('Error in transportation Stage');
-          return [stage, 'Failed'];
         }
+
+        const housebill = get(
+          xmlObjResponse,
+          'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.Housebill',
+          ''
+        );
+        const fileNumber = get(
+          xmlObjResponse,
+          'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.ShipQuoteNo',
+          ''
+        );
+        return { housebill, fileNumber };
       })
     );
-    console.info(apiResponses);
-
+    console.info(apiResponses)
     const eventArray = ['sendToLbn'];
     await Promise.all(
       eventArray.map(async (eventType) => {
@@ -150,7 +161,7 @@ module.exports.handler = async (event, context) => {
     if (flag !== 'Error') {
       const params = {
         Message: `An error occurred in function ${context.functionName}.\n\nERROR DETAILS: ${error}.\n\nId: ${get(dynamoData, 'Id', '')}.\n\nEVENT: ${JSON.stringify(event)}.\n\nNote: Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${'log table'} for understanding the complete data.`,
-        Subject: `Bio Rad Cancel Shipment ERROR ${context.functionName}`,
+        Subject: `Bio Rad Create Shipment ERROR ${context.functionName}`,
         TopicArn: process.env.NOTIFICATION_ARN,
       };
       try {
@@ -312,4 +323,40 @@ async function updateDb(updateQuery) {
     console.error('Update source API Request Failed: ', error);
     throw error;
   }
+}
+
+async function groupItems(items) {
+  const grouped = items.reduce((result, obj) => {
+    const key = `${obj.shipFromLocationId}-${obj.shipToLocationId}`;
+    if (!result[key]) {
+      result[key] = [];
+    }
+    result[key].push(obj);
+    return result;
+  }, {});
+
+  console.info(grouped);
+  return grouped;
+}
+
+async function getTotalDuration(stages, source, destination) {
+  let currentLocation = source;
+  let totalDuration = 0;
+  function getNextShipment(){
+    return stages.find((obj) => get(obj, 'loadingLocation.id', '') === currentLocation);
+  }
+  while (currentLocation !== destination) {
+    const nextStage = getNextShipment()
+    if (!nextStage) {
+      return null;
+    }
+    const duration = moment.duration(get(nextStage, 'totalDuration.value', 'PT0S')).asHours();
+    totalDuration += Number(duration);
+    currentLocation = get(nextStage, 'unloadingLocation.id', '');
+
+    if (currentLocation === destination) {
+      return totalDuration;
+    }
+  }
+  return null;
 }
