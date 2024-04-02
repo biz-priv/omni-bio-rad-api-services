@@ -14,6 +14,8 @@ const {
   prepareShipmentLineListDate,
   prepareDateValues,
   prepareWTPayload,
+  groupItems,
+  getTotalDuration,
 } = require('./dataHelper');
 
 const sns = new AWS.SNS();
@@ -130,7 +132,7 @@ module.exports.handler = async (event, context) => {
         return { housebill, fileNumber };
       })
     );
-    console.info(apiResponses)
+    console.info(apiResponses);
     const eventArray = ['sendToLbn'];
     await Promise.all(
       eventArray.map(async (eventType) => {
@@ -323,40 +325,4 @@ async function updateDb(updateQuery) {
     console.error('Update source API Request Failed: ', error);
     throw error;
   }
-}
-
-async function groupItems(items) {
-  const grouped = items.reduce((result, obj) => {
-    const key = `${obj.shipFromLocationId}-${obj.shipToLocationId}`;
-    if (!result[key]) {
-      result[key] = [];
-    }
-    result[key].push(obj);
-    return result;
-  }, {});
-
-  console.info(grouped);
-  return grouped;
-}
-
-async function getTotalDuration(stages, source, destination) {
-  let currentLocation = source;
-  let totalDuration = 0;
-  function getNextShipment(){
-    return stages.find((obj) => get(obj, 'loadingLocation.id', '') === currentLocation);
-  }
-  while (currentLocation !== destination) {
-    const nextStage = getNextShipment()
-    if (!nextStage) {
-      return null;
-    }
-    const duration = moment.duration(get(nextStage, 'totalDuration.value', 'PT0S')).asHours();
-    totalDuration += Number(duration);
-    currentLocation = get(nextStage, 'unloadingLocation.id', '');
-
-    if (currentLocation === destination) {
-      return totalDuration;
-    }
-  }
-  return null;
 }

@@ -33,7 +33,7 @@ const CONSTANTS = {
   },
   DimUOMV3: {
     INH: 'in',
-    CMT: 'cm'
+    CMT: 'cm',
   },
 };
 
@@ -68,7 +68,11 @@ async function prepareShipperAndConsigneeData(data) {
     ConsigneePhone: `+${get(data, 'unloadingLocation.address.phoneNumber.countryDialingCode', '')} ${get(data, 'unloadingLocation.address.phoneNumber.areaId', '')} ${get(data, 'unloadingLocation.address.phoneNumber.subscriberId', '')}`,
     ConsigneeFax: get(data, 'unloadingLocation.address.faxNumber.subscriberId', ''),
     ConsigneeEmail: get(data, 'unloadingLocation.address.emailAddress', ''),
-    BillToAcct: get(CONSTANTS, `billNo.${get(data, 'unloadingLocation.address.country', '')}`, '8061'),
+    BillToAcct: get(
+      CONSTANTS,
+      `billNo.${get(data, 'unloadingLocation.address.country', '')}`,
+      '8061'
+    ),
     Station: get(CONSTANTS, `station.${get(data, 'loadingLocation.address.country', '')}`, 'SFO'),
   };
 }
@@ -217,6 +221,42 @@ async function prepareWTPayload(
   }
 }
 
+async function groupItems(items) {
+  const grouped = items.reduce((result, obj) => {
+    const key = `${obj.shipFromLocationId}-${obj.shipToLocationId}`;
+    if (!result[key]) {
+      result[key] = [];
+    }
+    result[key].push(obj);
+    return result;
+  }, {});
+
+  console.info(grouped);
+  return grouped;
+}
+
+async function getTotalDuration(stages, source, destination) {
+  let currentLocation = source;
+  let totalDuration = 0;
+  function getNextShipment() {
+    return stages.find((obj) => get(obj, 'loadingLocation.id', '') === currentLocation);
+  }
+  while (currentLocation !== destination) {
+    const nextStage = getNextShipment();
+    if (!nextStage) {
+      return null;
+    }
+    const duration = moment.duration(get(nextStage, 'totalDuration.value', 'PT0S')).asHours();
+    totalDuration += Number(duration);
+    currentLocation = get(nextStage, 'unloadingLocation.id', '');
+
+    if (currentLocation === destination) {
+      return totalDuration;
+    }
+  }
+  return null;
+}
+
 module.exports = {
   prepareHeaderData,
   prepareShipperAndConsigneeData,
@@ -224,4 +264,6 @@ module.exports = {
   prepareShipmentLineListDate,
   prepareDateValues,
   prepareWTPayload,
+  getTotalDuration,
+  groupItems,
 };
