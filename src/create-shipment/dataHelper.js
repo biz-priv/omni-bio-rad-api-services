@@ -35,59 +35,75 @@ const CONSTANTS = {
     INH: 'in',
     CMT: 'cm',
   },
+  serviceLevel: [
+    { min: 0, max: 24, value: 'ND' },
+    { min: 24, max: 48, value: '2D' },
+    { min: 28, max: 60, value: '3A' },
+    { min: 60, max: 72, value: '3D' },
+    { min: 72, max: 96, value: '4D' },
+    { min: 96, max: 120, value: 'EC' },
+  ],
 };
 
 async function prepareHeaderData(eventBody) {
-  return {
+  const headerData =  {
+    DelBy: 'Between',
     DeclaredType: 'LL',
     CustomerNo: 1848,
     PayType: 3,
     ShipmentType: 'Shipment',
-    Mode: get(CONSTANTS, `mode.${get(eventBody, 'shippingTypeCode', '')}`, ''),
     IncoTermsCode: get(eventBody, 'incoterm', ''),
   };
+  if(get(CONSTANTS, `mode.${get(eventBody, 'shippingTypeCode', '')}`, '') !== ''){
+    headerData.Mode = get(CONSTANTS, `mode.${get(eventBody, 'shippingTypeCode', '')}`, '')
+  }
+  return headerData
 }
 
-async function prepareShipperAndConsigneeData(data) {
+async function prepareShipperAndConsigneeData(loadingStage, unloadingStage) {
   return {
-    ShipperName: get(data, 'loadingLocation.address.name', ''),
-    ShipperAddress1: `${get(data, 'loadingLocation.address.street', '')} ${get(data, 'loadingLocation.address.house', '')}`,
-    ShipperCity: get(data, 'loadingLocation.address.city', ''),
-    ShipperState: get(data, 'loadingLocation.address.region', ''),
-    ShipperCountry: get(data, 'loadingLocation.address.country', ''),
-    ShipperZip: get(data, 'loadingLocation.address.postalCode', ''),
-    ShipperPhone: `+${get(data, 'loadingLocation.address.phoneNumber.countryDialingCode', '')} ${get(data, 'loadingLocation.address.phoneNumber.areaId', '')} ${get(data, 'loadingLocation.address.phoneNumber.subscriberId', '')}`,
-    ShipperFax: get(data, 'loadingLocation.address.faxNumber.subscriberId', ''),
-    ShipperEmail: get(data, 'loadingLocation.address.emailAddress', ''),
-    ConsigneeName: get(data, 'unloadingLocation.address.name', ''),
-    ConsigneeAddress1: `${get(data, 'unloadingLocation.address.street', '')} ${get(data, 'unloadingLocation.address.house', '')}`,
-    ConsigneeCity: get(data, 'unloadingLocation.address.city', ''),
-    ConsigneeState: get(data, 'unloadingLocation.address.region', ''),
-    ConsigneeCountry: get(data, 'unloadingLocation.address.country', ''),
-    ConsigneeZip: get(data, 'unloadingLocation.address.postalCode', ''),
-    ConsigneePhone: `+${get(data, 'unloadingLocation.address.phoneNumber.countryDialingCode', '')} ${get(data, 'unloadingLocation.address.phoneNumber.areaId', '')} ${get(data, 'unloadingLocation.address.phoneNumber.subscriberId', '')}`,
-    ConsigneeFax: get(data, 'unloadingLocation.address.faxNumber.subscriberId', ''),
-    ConsigneeEmail: get(data, 'unloadingLocation.address.emailAddress', ''),
+    Station: get(
+      CONSTANTS,
+      `station.${get(loadingStage, 'loadingLocation.address.country', '')}`,
+      'SFO'
+    ),
+    ShipperName: get(loadingStage, 'loadingLocation.address.name', ''),
+    ShipperAddress1: `${get(loadingStage, 'loadingLocation.address.house', '')} ${get(loadingStage, 'loadingLocation.address.street', '')}`,
+    ShipperCity: get(loadingStage, 'loadingLocation.address.city', ''),
+    ShipperState: get(loadingStage, 'loadingLocation.address.region', ''),
+    ShipperCountry: get(loadingStage, 'loadingLocation.address.country', ''),
+    ShipperZip: get(loadingStage, 'loadingLocation.address.postalCode', ''),
+    ShipperPhone: `+${get(loadingStage, 'loadingLocation.address.phoneNumber.countryDialingCode', '')} ${get(loadingStage, 'loadingLocation.address.phoneNumber.areaId', '')} ${get(loadingStage, 'loadingLocation.address.phoneNumber.subscriberId', '')}`,
+    ShipperFax: get(loadingStage, 'loadingLocation.address.faxNumber.subscriberId', ''),
+    ShipperEmail: get(loadingStage, 'loadingLocation.address.emailAddress', ''),
+    ConsigneeName: get(unloadingStage, 'unloadingLocation.address.name', ''),
+    ConsigneeAddress1: `${get(unloadingStage, 'unloadingLocation.address.house', '')} ${get(unloadingStage, 'unloadingLocation.address.street', '')}`,
+    ConsigneeCity: get(unloadingStage, 'unloadingLocation.address.city', ''),
+    ConsigneeState: get(unloadingStage, 'unloadingLocation.address.region', ''),
+    ConsigneeCountry: get(unloadingStage, 'unloadingLocation.address.country', ''),
+    ConsigneeZip: get(unloadingStage, 'unloadingLocation.address.postalCode', ''),
+    ConsigneePhone: `+${get(unloadingStage, 'unloadingLocation.address.phoneNumber.countryDialingCode', '')} ${get(unloadingStage, 'unloadingLocation.address.phoneNumber.areaId', '')} ${get(unloadingStage, 'unloadingLocation.address.phoneNumber.subscriberId', '')}`,
+    ConsigneeFax: get(unloadingStage, 'unloadingLocation.address.faxNumber.subscriberId', ''),
+    ConsigneeEmail: get(unloadingStage, 'unloadingLocation.address.emailAddress', ''),
     BillToAcct: get(
       CONSTANTS,
-      `billNo.${get(data, 'unloadingLocation.address.country', '')}`,
+      `billNo.${get(unloadingStage, 'unloadingLocation.address.country', '')}`,
       '8061'
     ),
-    Station: get(CONSTANTS, `station.${get(data, 'loadingLocation.address.country', '')}`, 'SFO'),
   };
 }
 
-async function prepareReferenceList(data, eventBody) {
+async function prepareReferenceList(loadingStage, unloadingStage, eventBody) {
   const referenceList = {
     ReferenceList: {
       NewShipmentRefsV3: [
         {
-          ReferenceNo: get(data, 'loadingLocation.id', ''),
+          ReferenceNo: get(loadingStage, 'loadingLocation.id', ''),
           CustomerTypeV3: 'Shipper',
           RefTypeId: 'STP',
         },
         {
-          ReferenceNo: get(data, 'unloadingLocation.id', ''),
+          ReferenceNo: get(unloadingStage, 'unloadingLocation.id', ''),
           CustomerTypeV3: 'Consignee',
           RefTypeId: 'STP',
         },
@@ -132,23 +148,35 @@ async function prepareShipmentLineListDate(items) {
   };
 }
 
-async function prepareDateValues(data) {
+async function prepareDateValues(loadingStage, unloadingStage) {
   try {
     const readyDate = moment
-      .utc(get(data, 'requestedLoadingTimeStart'))
-      .add(get(CONSTANTS, `timeAway.${get(data, 'loadingLocationTimezone', 'CST')}`, 0), 'hours')
+      .utc(get(loadingStage, 'requestedLoadingTimeStart'))
+      .add(
+        get(CONSTANTS, `timeAway.${get(loadingStage, 'loadingLocationTimezone', 'CST')}`, 0),
+        'hours'
+      )
       .format('YYYY-MM-DDTHH:mm:ss-00:00');
     const closeTime = moment
-      .utc(get(data, 'requestedLoadingTimeEnd'))
-      .add(get(CONSTANTS, `timeAway.${get(data, 'loadingLocationTimezone', 'CST')}`, 0), 'hours')
+      .utc(get(loadingStage, 'requestedLoadingTimeEnd'))
+      .add(
+        get(CONSTANTS, `timeAway.${get(loadingStage, 'loadingLocationTimezone', 'CST')}`, 0),
+        'hours'
+      )
       .format('YYYY-MM-DDTHH:mm:ss-00:00');
     const deliveryDate = moment
-      .utc(get(data, 'requestedUnloadingTimeStart'))
-      .add(get(CONSTANTS, `timeAway.${get(data, 'unloadingLocationTimezone', 'CST')}`, 0), 'hours')
+      .utc(get(unloadingStage, 'requestedUnloadingTimeStart'))
+      .add(
+        get(CONSTANTS, `timeAway.${get(unloadingStage, 'unloadingLocationTimezone', 'CST')}`, 0),
+        'hours'
+      )
       .format('YYYY-MM-DDTHH:mm:ss-00:00');
     const deliveryTime = moment
-      .utc(get(data, 'requestedUnloadingTimeEnd'))
-      .add(get(CONSTANTS, `timeAway.${get(data, 'unloadingLocationTimezone', 'CST')}`, 0), 'hours')
+      .utc(get(unloadingStage, 'requestedUnloadingTimeEnd'))
+      .add(
+        get(CONSTANTS, `timeAway.${get(unloadingStage, 'unloadingLocationTimezone', 'CST')}`, 0),
+        'hours'
+      )
       .format('YYYY-MM-DDTHH:mm:ss-00:00');
     return {
       ReadyDate: readyDate,
@@ -169,7 +197,8 @@ async function prepareWTPayload(
   shipperAndConsignee,
   referenceList,
   shipmentLineList,
-  dateValues
+  dateValues,
+  serviceLevel
 ) {
   try {
     const finalData = {
@@ -178,6 +207,7 @@ async function prepareWTPayload(
       ...referenceList,
       ...shipmentLineList,
       ...dateValues,
+      ServiceLevel: serviceLevel,
     };
 
     const xmlBuilder = new xml2js.Builder({
@@ -231,30 +261,42 @@ async function groupItems(items) {
     return result;
   }, {});
 
-  console.info(grouped);
   return grouped;
 }
 
-async function getTotalDuration(stages, source, destination) {
+async function getServiceLevel(stages, source, destination) {
   let currentLocation = source;
   let totalDuration = 0;
   function getNextShipment() {
     return stages.find((obj) => get(obj, 'loadingLocation.id', '') === currentLocation);
   }
+  function getServiceLevelValue() {
+    return get(CONSTANTS, 'serviceLevel', []).find(
+      (obj) => totalDuration > obj.min && totalDuration <= obj.max
+    );
+  }
   while (currentLocation !== destination) {
     const nextStage = getNextShipment();
-    if (!nextStage) {
-      return null;
+    if (!nextStage || get(nextStage, 'totalDuration.value', '') === '') {
+      throw new Error(
+        `Cannot get the total duration from the connecting stages, please provide the total duration for this shipment from ${source} to ${destination}`
+      );
     }
     const duration = moment.duration(get(nextStage, 'totalDuration.value', 'PT0S')).asHours();
     totalDuration += Number(duration);
     currentLocation = get(nextStage, 'unloadingLocation.id', '');
 
     if (currentLocation === destination) {
-      return totalDuration;
+      if (totalDuration > 120) {
+        return 'E7';
+      }
+      const result = getServiceLevelValue();
+      return get(result, 'value', '');
     }
   }
-  return null;
+  throw new Error(
+    `Cannot get the total duration from the connecting stages, please provide the total duration for this shipment from ${source} to ${destination}`
+  );
 }
 
 module.exports = {
@@ -264,6 +306,6 @@ module.exports = {
   prepareShipmentLineListDate,
   prepareDateValues,
   prepareWTPayload,
-  getTotalDuration,
+  getServiceLevel,
   groupItems,
 };

@@ -15,19 +15,19 @@ const {
   prepareDateValues,
   prepareWTPayload,
   groupItems,
-  getTotalDuration,
+  getServiceLevel,
 } = require('./dataHelper');
 
 const sns = new AWS.SNS();
 const dynamoData = {};
 
 module.exports.handler = async (event, context) => {
-  console.info(event);
+  // console.info(event);
 
   try {
-    const eventBody = JSON.parse(get(event, 'body', {}));
+    // const eventBody = JSON.parse(get(event, 'body', {}));
 
-    // const eventBody = get(event, 'body', {});
+    const eventBody = get(event, 'body', {});
 
     // Set the time zone to CST
     const cstDate = moment().tz('America/Chicago');
@@ -48,7 +48,7 @@ module.exports.handler = async (event, context) => {
     console.info(dynamoData.CSTDateTime);
 
     const headerData = await prepareHeaderData(eventBody);
-    console.info(headerData);
+    // console.info(headerData);
 
     const transportationStages = get(eventBody, 'transportationStages', []);
     const items = get(eventBody, 'items', []);
@@ -58,39 +58,62 @@ module.exports.handler = async (event, context) => {
     const groupedItemKeys = Object.keys(groupedItems);
     const apiResponses = await Promise.all(
       groupedItemKeys.map(async (key) => {
+        const loadingStage = transportationStages.find(
+          (obj) =>
+            get(obj, 'loadingLocation.id', '') === key.split('-')[0]
+        );
+        const unloadingStage = transportationStages.find(
+          (obj) =>
+            get(obj, 'unloadingLocation.id', '') === key.split('-')[1]
+        );
         const stage = transportationStages.find(
           (obj) =>
             get(obj, 'loadingLocation.id', '') === key.split('-')[0] &&
             get(obj, 'unloadingLocation.id', '') === key.split('-')[1]
         );
-        const shipperAndConsignee = await prepareShipperAndConsigneeData(stage);
+        console.info(loadingStage.loadingLocation.id)
+        console.info(unloadingStage.unloadingLocation.id)
+        console.info(stage)
+        let serviceLevel = '';
+        if(Number(get(eventBody, 'shippingTypeCode', 0)) === 18 ){
+          serviceLevel = 'HS'
+        }else if(!stage){
+          serviceLevel = await getServiceLevel(transportationStages, get(loadingStage, 'loadingLocation.id', ''), get(unloadingStage, 'unloadingLocation.id', ''));
+        }else if (get(stage, 'totalDuration.value', '') !== ''){
+          serviceLevel = get(stage, 'totalDuration.value', 'PT0SM');
+        } else {
+          throw new Error(`Cannot get the total duration from the connecting stages, please provide the total duration for this shipment from ${get(loadingStage, 'loadingLocation.id', '')} to ${get(unloadingStage, 'unloadingLocation.id', '')}`);
+        }
+
+        const shipperAndConsignee = await prepareShipperAndConsigneeData(loadingStage, unloadingStage);
         console.info(shipperAndConsignee);
 
-        const referenceList = await prepareReferenceList(stage, eventBody);
+        const referenceList = await prepareReferenceList(loadingStage, unloadingStage, eventBody);
         console.info(JSON.stringify(referenceList));
 
         const shipmentLineList = await prepareShipmentLineListDate(get(groupedItems, key, []));
         console.info(JSON.stringify(shipmentLineList));
 
-        const dateValues = await prepareDateValues(stage);
+        const dateValues = await prepareDateValues(loadingStage, unloadingStage, transportationStages);
         console.info(dateValues);
 
-        let totalDuration = get(stage, 'totalDuration.value', '');
-        if (totalDuration === '') {
-          totalDuration = await getTotalDuration(
-            transportationStages,
-            get(stage, 'loadingLocation.id', ''),
-            get(stage, 'unloadingLocation.id', '')
-          );
-        }
-        console.info(totalDuration);
+        // let totalDuration = get(stage, 'totalDuration.value', '');
+        // if (totalDuration === '') {
+        //   totalDuration = await getServiceLevel(
+        //     transportationStages,
+        //     get(stage, 'loadingLocation.id', ''),
+        //     get(stage, 'unloadingLocation.id', '')
+        //   );
+        // }
+        // console.info(totalDuration);
 
         const xmlPayload = await prepareWTPayload(
           headerData,
           shipperAndConsignee,
           referenceList,
           shipmentLineList,
-          dateValues
+          dateValues,
+          serviceLevel,
         );
         console.info(xmlPayload);
 
@@ -133,7 +156,7 @@ module.exports.handler = async (event, context) => {
       })
     );
     console.info(apiResponses);
-    const eventArray = ['sendToLbn'];
+    const eventArray = ['sendToLbn', 'updateDb'];
     await Promise.all(
       eventArray.map(async (eventType) => {
         await sendToLbnAndUpdateInSourceDb(eventType, apiResponses);
@@ -162,7 +185,7 @@ module.exports.handler = async (event, context) => {
     const flag = errorMsgVal.split(',')[0];
     if (flag !== 'Error') {
       const params = {
-        Message: `An error occurred in function ${context.functionName}.\n\nERROR DETAILS: ${error}.\n\nId: ${get(dynamoData, 'Id', '')}.\n\nEVENT: ${JSON.stringify(event)}.\n\nNote: Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${'log table'} for understanding the complete data.`,
+        Message: `An error occurred in function ${context.functionName}.\n\nERROR DETAILS: ${error}.\n\nId: ${get(dynamoData, 'Id', '')}.\n\nEVENT: ${JSON.stringify(event)}.\n\nNote: Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.`,
         Subject: `Bio Rad Create Shipment ERROR ${context.functionName}`,
         TopicArn: process.env.NOTIFICATION_ARN,
       };
@@ -223,11 +246,12 @@ async function sendToLbnAndUpdateInSourceDb(eventType, responses) {
       console.info('fileNumberArray: ', fileNumberArray);
 
       const updateQuery = `update tbl_shipmentheader set
-      CallInPhone=${get(dynamoData, 'CallInPhone', '')},
-      CallInFax=${get(dynamoData, 'CallInFax', '')},
-      QuoteContactEmail=${get(dynamoData, 'QuoteContactEmail', '')}
-      where fk_orderno in (${fileNumberArray.join(',')});`;
+      CallInPhone='${get(dynamoData, 'CallInPhone', '')}',
+      CallInFax='${get(dynamoData, 'CallInFax', '')}',
+      QuoteContactEmail='${get(dynamoData, 'QuoteContactEmail', '')}'
+      where pk_orderno in (${fileNumberArray.join(',')});`;
 
+      console.info(updateQuery)
       const apiResult = await updateDb(updateQuery);
       console.info(apiResult);
     } else {
@@ -274,7 +298,7 @@ async function getLbnToken() {
     throw new Error(`Lbn token API Request Failed: ${res}`);
   } catch (error) {
     console.error('Lbn token API Request Failed: ', error);
-    throw error;
+    throw new Error(`Lbn token API Request Failed: ${error}`);
   }
 }
 
@@ -298,7 +322,7 @@ async function sendToLbn(token, payload) {
     throw new Error(`Lbn main API Request Failed: ${res}`);
   } catch (error) {
     console.error('Lbn main API Request Failed: ', error);
-    throw error;
+    throw new Error(`Lbn main API Request Failed: ${error}`);
   }
 }
 
@@ -320,9 +344,9 @@ async function updateDb(updateQuery) {
     if (get(res, 'status', '') === 200) {
       return get(res, 'data', '');
     }
-    throw new Error(`Update source API Request Failed: ${res}`);
+    throw new Error(`Update source db API Request Failed: ${res}`);
   } catch (error) {
-    console.error('Update source API Request Failed: ', error);
-    throw error;
+    console.error('Update source db API Request Failed: ', error);
+    throw new Error(`Update source db API Request Failed: ${error}`);
   }
 }
