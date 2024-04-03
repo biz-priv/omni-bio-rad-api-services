@@ -151,6 +151,7 @@ module.exports.handler = async (event, context) => {
       })
     );
     console.info(apiResponses);
+    dynamoData.ShipmentData = apiResponses;
     const eventArray = ['sendToLbn', 'updateDb'];
     await Promise.all(
       eventArray.map(async (eventType) => {
