@@ -25,9 +25,9 @@ module.exports.handler = async (event, context) => {
   // console.info(event);
 
   try {
-    // const eventBody = JSON.parse(get(event, 'body', {}));
+    const eventBody = JSON.parse(get(event, 'body', {}));
 
-    const eventBody = get(event, 'body', {});
+    // const eventBody = get(event, 'body', {});
 
     // Set the time zone to CST
     const cstDate = moment().tz('America/Chicago');
