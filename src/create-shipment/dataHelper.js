@@ -300,6 +300,7 @@ async function getServiceLevel(stages, source, destination) {
 }
 
 module.exports = {
+  CONSTANTS,
   prepareHeaderData,
   prepareShipperAndConsigneeData,
   prepareReferenceList,

@@ -16,6 +16,7 @@ const {
   prepareWTPayload,
   groupItems,
   getServiceLevel,
+  CONSTANTS,
 } = require('./dataHelper');
 
 const sns = new AWS.SNS();
@@ -35,8 +36,7 @@ module.exports.handler = async (event, context) => {
     dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
     dynamoData.Event = event;
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
-    dynamoData.Process = 'CANCEL';
-    dynamoData.XmlPayload = {};
+    dynamoData.Process = 'CREATE';
     dynamoData.FreightOrderId = get(eventBody, 'freightOrderId', '');
     dynamoData.OrderingPartyLbnId = get(eventBody, 'orderingPartyLbnId', '');
     dynamoData.OriginatorId = get(eventBody, 'originatorId', '');
@@ -78,9 +78,13 @@ module.exports.handler = async (event, context) => {
         if(Number(get(eventBody, 'shippingTypeCode', 0)) === 18 ){
           serviceLevel = 'HS'
         }else if(!stage){
-          serviceLevel = await getServiceLevel(transportationStages, get(loadingStage, 'loadingLocation.id', ''), get(unloadingStage, 'unloadingLocation.id', ''));
+          serviceLevel = await getServiceLevel(transportationStages, get(loadingStage, 'loadingLocation.id', ''), get(unloadingStage, 'unloadingLocation.id', ''), 'multiple');
         }else if (get(stage, 'totalDuration.value', '') !== ''){
-          serviceLevel = get(stage, 'totalDuration.value', 'PT0SM');
+          const totalDuration = moment.duration(get(stage, 'totalDuration.value', '')).asHours();
+          const serviceLevelValue = get(CONSTANTS, 'serviceLevel', []).find(
+            (obj) => totalDuration > obj.min && totalDuration <= obj.max
+          );
+          serviceLevel = get(serviceLevelValue, 'value', '')
         } else {
           throw new Error(`Cannot get the total duration from the connecting stages, please provide the total duration for this shipment from ${get(loadingStage, 'loadingLocation.id', '')} to ${get(unloadingStage, 'unloadingLocation.id', '')}`);
         }
@@ -97,16 +101,6 @@ module.exports.handler = async (event, context) => {
         const dateValues = await prepareDateValues(loadingStage, unloadingStage, transportationStages);
         console.info(dateValues);
 
-        // let totalDuration = get(stage, 'totalDuration.value', '');
-        // if (totalDuration === '') {
-        //   totalDuration = await getServiceLevel(
-        //     transportationStages,
-        //     get(stage, 'loadingLocation.id', ''),
-        //     get(stage, 'unloadingLocation.id', '')
-        //   );
-        // }
-        // console.info(totalDuration);
-
         const xmlPayload = await prepareWTPayload(
           headerData,
           shipperAndConsignee,
@@ -116,6 +110,7 @@ module.exports.handler = async (event, context) => {
           serviceLevel,
         );
         console.info(xmlPayload);
+        dynamoData.XmlPayload = xmlPayload;
 
         const xmlResponse = await sendToWT(xmlPayload);
 
@@ -167,7 +162,8 @@ module.exports.handler = async (event, context) => {
       statusCode: 200,
       body: JSON.stringify(
         {
-          Message: 'Success',
+          responseId: dynamoData.Id,
+          message: 'Success',
         },
         null,
         2
@@ -206,7 +202,7 @@ module.exports.handler = async (event, context) => {
       body: JSON.stringify(
         {
           responseId: dynamoData.Id,
-          message: error,
+          message: errorMsgVal,
         },
         null,
         2
