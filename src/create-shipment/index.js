@@ -110,7 +110,6 @@ module.exports.handler = async (event, context) => {
           serviceLevel,
         );
         console.info(xmlPayload);
-        dynamoData.XmlPayload = xmlPayload;
 
         const xmlResponse = await sendToWT(xmlPayload);
 
@@ -152,6 +151,8 @@ module.exports.handler = async (event, context) => {
     );
     console.info(apiResponses);
     dynamoData.ShipmentData = apiResponses;
+    dynamoData.FileNumber = apiResponses.map((obj) => obj.fileNumber)
+    dynamoData.Housebill = apiResponses.map((obj) => obj.fileNumber)
     const eventArray = ['sendToLbn', 'updateDb'];
     await Promise.all(
       eventArray.map(async (eventType) => {
@@ -159,6 +160,7 @@ module.exports.handler = async (event, context) => {
       })
     );
 
+    dynamoData.Status = 'SUCCESS';
     await putLogItem(dynamoData);
     return {
       statusCode: 200,
@@ -233,7 +235,7 @@ async function sendToWT(postData) {
     throw new Error(`WORLD TRAK API Request Failed: ${res}`);
   } catch (error) {
     console.error('WORLD TRAK API Request Failed: ', error);
-    throw error;
+    throw new Error(`WORLD TRAK API Request Failed: ${error}`);
   }
 }
 

@@ -98,6 +98,11 @@ async function prepareReferenceList(loadingStage, unloadingStage, eventBody) {
     ReferenceList: {
       NewShipmentRefsV3: [
         {
+          ReferenceNo: get(loadingStage, 'senderSystemStageID', ''),
+          CustomerTypeV3: 'Shipper',
+          RefTypeId: 'DL#',
+        },
+        {
           ReferenceNo: get(loadingStage, 'loadingLocation.id', ''),
           CustomerTypeV3: 'Shipper',
           RefTypeId: 'STP',
