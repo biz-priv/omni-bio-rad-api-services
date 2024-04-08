@@ -49,10 +49,14 @@ module.exports.handler = async (event, context) => {
     );
     console.info(stopsUpdateResults);
 
-    const payload = await preparePayload(get(dynamoData, 'FreightOrderId', ''));
-    console.info(payload);
+    const fileNumbers = await getFileNumbers(get(dynamoData, 'FreightOrderId', ''));
 
-    await sendToWT(payload);
+    await Promise.all(fileNumbers.map(async (fileNumber)=>{
+        console.info(fileNumber)
+        const payload = await preparePayload(fileNumber);
+        console.info(payload)
+        await sendToWT(payload);
+    }))
 
     return {
       statusCode: 200,
@@ -107,7 +111,7 @@ module.exports.handler = async (event, context) => {
   }
 };
 
-async function preparePayload(referenceNo) {
+async function getFileNumbers(referenceNo) {
   try {
     const referenceParams = {
       TableName: process.env.REFERENCE_TABLE,
@@ -119,42 +123,55 @@ async function preparePayload(referenceNo) {
       },
     };
     const referenceResult = await getData(referenceParams);
-    const fileNumber = get(referenceResult, '[0].FK_OrderNo', '');
-    const shipmentHeaderParams = {
-      TableName: process.env.SHIPMENT_HEADER_TABLE,
-      KeyConditionExpression: 'PK_OrderNo = :PK_OrderNo',
-      ExpressionAttributeValues: {
-        ':PK_OrderNo': fileNumber,
-      },
-    };
-    const shipmentHeaderResult = await getData(shipmentHeaderParams);
-    const housebill = get(shipmentHeaderResult, '[0].Housebill', '');
+    if(referenceResult.length === 0){
+        throw new Error(`There is no data for the given freigth order Id: ${referenceNo}`)
+    }
+    const fileNumbers = referenceResult.map(item => get(item, 'FK_OrderNo', ''))
+    return fileNumbers
 
-    const payload = `<?xml version="1.0"?>
-    <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-      <soap:Header>
-        <AuthHeader xmlns="http://tempuri.org/">
-          <UserName>saplbn</UserName>
-          <Password>saplbn</Password>
-        </AuthHeader>
-      </soap:Header>
-      <soap:Body>
-        <WriteTrackingNote xmlns="http://tempuri.org/">
-          <HandlingStation/>
-          <HouseBill>${housebill}</HouseBill>
-          <TrackingNotes>
-            <TrackingNotes>
-              <TrackingNoteMessage>technicalId ${get(dynamoData, 'TechnicalId', '')}</TrackingNoteMessage>
-            </TrackingNotes>
-          </TrackingNotes>
-        </WriteTrackingNote>
-      </soap:Body>
-    </soap:Envelope>`;
-    return payload;
   } catch (error) {
-    console.info('Error while preparing payload', error);
-    throw new Error(`Error while preparing payload: ${error}`);
+    console.info('Error while fetching file numbers based on referenceNo', error);
+    throw new Error(`Error while fetching file numbers based on referenceNo: ${error}`);
   }
+}
+
+async function preparePayload(fileNumber){
+    try{
+        const shipmentHeaderParams = {
+            TableName: process.env.SHIPMENT_HEADER_TABLE,
+            KeyConditionExpression: 'PK_OrderNo = :PK_OrderNo',
+            ExpressionAttributeValues: {
+              ':PK_OrderNo': fileNumber,
+            },
+          };
+          const shipmentHeaderResult = await getData(shipmentHeaderParams);
+          const housebill = get(shipmentHeaderResult, '[0].Housebill', '');
+
+          const payload = `<?xml version="1.0"?>
+          <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+            <soap:Header>
+              <AuthHeader xmlns="http://tempuri.org/">
+                <UserName>saplbn</UserName>
+                <Password>saplbn</Password>
+              </AuthHeader>
+            </soap:Header>
+            <soap:Body>
+              <WriteTrackingNote xmlns="http://tempuri.org/">
+                <HandlingStation/>
+                <HouseBill>${housebill}</HouseBill>
+                <TrackingNotes>
+                  <TrackingNotes>
+                    <TrackingNoteMessage>technicalId ${get(dynamoData, 'TechnicalId', '')}</TrackingNoteMessage>
+                  </TrackingNotes>
+                </TrackingNotes>
+              </WriteTrackingNote>
+            </soap:Body>
+          </soap:Envelope>`;
+          return payload;
+    }catch(error){
+        console.error(error)
+        throw new Error(`Error while preparing payload for fileNumber: ${fileNumber}, Error: ${error}`)
+    }
 }
 
 async function sendToWT(postData) {
