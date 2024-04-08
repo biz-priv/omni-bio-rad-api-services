@@ -17,7 +17,7 @@ async function xmlJsonConverter(xmlData) {
   }
 }
 
-async function querySourceDb(updateQuery) {
+async function querySourceDb(query) {
   try {
     const config = {
       method: 'post',
@@ -27,7 +27,7 @@ async function querySourceDb(updateQuery) {
         'Content-Type': 'application/json',
         'x-api-key': process.env.UPDATE_SOURCE_DB_API_KEY,
       },
-      data: { query: updateQuery },
+      data: { query },
     };
 
     console.info('config: ', config);

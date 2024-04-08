@@ -34,7 +34,7 @@ module.exports.handler = async (event, context) => {
     const cstDate = moment().tz('America/Chicago');
     dynamoData.CSTDate = cstDate.format('YYYY-MM-DD');
     dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
-    dynamoData.Event = event;
+    dynamoData.Event = get(event, 'body', '');
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
     dynamoData.Process = 'CREATE';
     dynamoData.FreightOrderId = get(eventBody, 'freightOrderId', '');

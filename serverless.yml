@@ -78,6 +78,7 @@ functions:
   update-shipment: ${file(config/functions/update-shipment.yml):function}
   cancel-shipment: ${file(config/functions/cancel-shipment.yml):function}
   update-source-db: ${file(config/functions/update-source-db.yml):function}
+  add-tracking: ${file(config/functions/add-tracking.yml):function}
 
 layers:
   NodeModules:
