@@ -13,9 +13,9 @@ const dynamoData = {};
 
 module.exports.handler = async (event, context) => {
   try {
-    // const eventBody = JSON.parse(get(event, 'body', {}));
+    const eventBody = JSON.parse(get(event, 'body', {}));
 
-    const eventBody = get(event, 'body', {});
+    // const eventBody = get(event, 'body', {});
 
     console.info(eventBody);
 
