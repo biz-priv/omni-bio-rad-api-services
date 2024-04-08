@@ -6,7 +6,7 @@ const axios = require('axios');
 const uuid = require('uuid');
 const moment = require('moment-timezone');
 const { putLogItem } = require('../Shared/dynamo');
-const { xmlJsonConverter } = require('../Shared/dataHelper');
+const { xmlJsonConverter, querySourceDb } = require('../Shared/dataHelper');
 const {
   prepareHeaderData,
   prepareShipperAndConsigneeData,
@@ -59,37 +59,45 @@ module.exports.handler = async (event, context) => {
     const apiResponses = await Promise.all(
       groupedItemKeys.map(async (key) => {
         const loadingStage = transportationStages.find(
-          (obj) =>
-            get(obj, 'loadingLocation.id', '') === key.split('-')[0]
+          (obj) => get(obj, 'loadingLocation.id', '') === key.split('-')[0]
         );
         const unloadingStage = transportationStages.find(
-          (obj) =>
-            get(obj, 'unloadingLocation.id', '') === key.split('-')[1]
+          (obj) => get(obj, 'unloadingLocation.id', '') === key.split('-')[1]
         );
         const stage = transportationStages.find(
           (obj) =>
             get(obj, 'loadingLocation.id', '') === key.split('-')[0] &&
             get(obj, 'unloadingLocation.id', '') === key.split('-')[1]
         );
-        console.info(loadingStage.loadingLocation.id)
-        console.info(unloadingStage.unloadingLocation.id)
-        console.info(stage)
+        console.info(loadingStage.loadingLocation.id);
+        console.info(unloadingStage.unloadingLocation.id);
+        console.info(stage);
         let serviceLevel = '';
-        if(Number(get(eventBody, 'shippingTypeCode', 0)) === 18 ){
-          serviceLevel = 'HS'
-        }else if(!stage){
-          serviceLevel = await getServiceLevel(transportationStages, get(loadingStage, 'loadingLocation.id', ''), get(unloadingStage, 'unloadingLocation.id', ''), 'multiple');
-        }else if (get(stage, 'totalDuration.value', '') !== ''){
+        if (Number(get(eventBody, 'shippingTypeCode', 0)) === 18) {
+          serviceLevel = 'HS';
+        } else if (!stage) {
+          serviceLevel = await getServiceLevel(
+            transportationStages,
+            get(loadingStage, 'loadingLocation.id', ''),
+            get(unloadingStage, 'unloadingLocation.id', ''),
+            'multiple'
+          );
+        } else if (get(stage, 'totalDuration.value', '') !== '') {
           const totalDuration = moment.duration(get(stage, 'totalDuration.value', '')).asHours();
           const serviceLevelValue = get(CONSTANTS, 'serviceLevel', []).find(
             (obj) => totalDuration > obj.min && totalDuration <= obj.max
           );
-          serviceLevel = get(serviceLevelValue, 'value', '')
+          serviceLevel = get(serviceLevelValue, 'value', '');
         } else {
-          throw new Error(`Cannot get the total duration from the connecting stages, please provide the total duration for this shipment from ${get(loadingStage, 'loadingLocation.id', '')} to ${get(unloadingStage, 'unloadingLocation.id', '')}`);
+          throw new Error(
+            `Cannot get the total duration from the connecting stages, please provide the total duration for this shipment from ${get(loadingStage, 'loadingLocation.id', '')} to ${get(unloadingStage, 'unloadingLocation.id', '')}`
+          );
         }
 
-        const shipperAndConsignee = await prepareShipperAndConsigneeData(loadingStage, unloadingStage);
+        const shipperAndConsignee = await prepareShipperAndConsigneeData(
+          loadingStage,
+          unloadingStage
+        );
         console.info(shipperAndConsignee);
 
         const referenceList = await prepareReferenceList(loadingStage, unloadingStage, eventBody);
@@ -98,7 +106,11 @@ module.exports.handler = async (event, context) => {
         const shipmentLineList = await prepareShipmentLineListDate(get(groupedItems, key, []));
         console.info(JSON.stringify(shipmentLineList));
 
-        const dateValues = await prepareDateValues(loadingStage, unloadingStage, transportationStages);
+        const dateValues = await prepareDateValues(
+          loadingStage,
+          unloadingStage,
+          transportationStages
+        );
         console.info(dateValues);
 
         const xmlPayload = await prepareWTPayload(
@@ -107,7 +119,7 @@ module.exports.handler = async (event, context) => {
           referenceList,
           shipmentLineList,
           dateValues,
-          serviceLevel,
+          serviceLevel
         );
         console.info(xmlPayload);
 
@@ -151,8 +163,8 @@ module.exports.handler = async (event, context) => {
     );
     console.info(apiResponses);
     dynamoData.ShipmentData = apiResponses;
-    dynamoData.FileNumber = apiResponses.map((obj) => obj.fileNumber)
-    dynamoData.Housebill = apiResponses.map((obj) => obj.fileNumber)
+    dynamoData.FileNumber = apiResponses.map((obj) => obj.fileNumber);
+    dynamoData.Housebill = apiResponses.map((obj) => obj.fileNumber);
     const eventArray = ['sendToLbn', 'updateDb'];
     await Promise.all(
       eventArray.map(async (eventType) => {
@@ -251,8 +263,8 @@ async function sendToLbnAndUpdateInSourceDb(eventType, responses) {
       QuoteContactEmail='${get(dynamoData, 'QuoteContactEmail', '')}'
       where pk_orderno in (${fileNumberArray.join(',')});`;
 
-      console.info(updateQuery)
-      const apiResult = await updateDb(updateQuery);
+      console.info(updateQuery);
+      const apiResult = await querySourceDb(updateQuery);
       console.info(apiResult);
     } else {
       const token = await getLbnToken();
@@ -323,30 +335,5 @@ async function sendToLbn(token, payload) {
   } catch (error) {
     console.error('Lbn main API Request Failed: ', error);
     throw new Error(`Lbn main API Request Failed: ${error}`);
-  }
-}
-
-async function updateDb(updateQuery) {
-  try {
-    const config = {
-      method: 'post',
-      maxBodyLength: Infinity,
-      url: process.env.UPDATE_SOURCE_DB_URL,
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.UPDATE_SOURCE_DB_API_KEY,
-      },
-      data: { query: updateQuery },
-    };
-
-    console.info('config: ', config);
-    const res = await axios.request(config);
-    if (get(res, 'status', '') === 200) {
-      return get(res, 'data', '');
-    }
-    throw new Error(`Update source db API Request Failed: ${res}`);
-  } catch (error) {
-    console.error('Update source db API Request Failed: ', error);
-    throw new Error(`Update source db API Request Failed: ${error}`);
   }
 }

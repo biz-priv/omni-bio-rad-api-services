@@ -1,0 +1,22 @@
+---
+function:
+  name: omni-bio-rad-add-tracking-${self:provider.stage}
+  handler: src/add-tracking/index.handler
+  runtime: nodejs20.x
+  timeout: 30
+  layers:
+    - { Ref: NodeModulesLambdaLayer }
+  package:
+    patterns:
+      - '!**/*'
+      - src/add-tracking/**
+      - src/Shared/**
+  events:
+    - http:
+        path: /addTracking
+        method: PUT
+        private: true
+  environment:
+    ADD_TRACKING_URL: ${ssm:/omni-ivia/${self:provider.stage}/addMilestone/loc.url}
+    UPDATE_SOURCE_DB_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/update-source-db-endpoint}
+    UPDATE_SOURCE_DB_API_KEY: ${ssm:/omni/${self:provider.stage}/bio-rad/api-key}

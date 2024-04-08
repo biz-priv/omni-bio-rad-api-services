@@ -46,7 +46,7 @@ const CONSTANTS = {
 };
 
 async function prepareHeaderData(eventBody) {
-  const headerData =  {
+  const headerData = {
     DelBy: 'Between',
     DeclaredType: 'LL',
     CustomerNo: 1848,
@@ -54,10 +54,10 @@ async function prepareHeaderData(eventBody) {
     ShipmentType: 'Shipment',
     IncoTermsCode: get(eventBody, 'incoterm', ''),
   };
-  if(get(CONSTANTS, `mode.${get(eventBody, 'shippingTypeCode', '')}`, '') !== ''){
-    headerData.Mode = get(CONSTANTS, `mode.${get(eventBody, 'shippingTypeCode', '')}`, '')
+  if (get(CONSTANTS, `mode.${get(eventBody, 'shippingTypeCode', '')}`, '') !== '') {
+    headerData.Mode = get(CONSTANTS, `mode.${get(eventBody, 'shippingTypeCode', '')}`, '');
   }
-  return headerData
+  return headerData;
 }
 
 async function prepareShipperAndConsigneeData(loadingStage, unloadingStage) {
