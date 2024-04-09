@@ -138,6 +138,13 @@ async function getHousebills(referenceNo) {
           },
         };
         const headerResult = await getData(headerParams);
+
+        const unwantedArray = headerResult
+        .filter((obj) => !['WEB', 'CAN'].includes(obj.FK_OrderStatusId));
+        if(unwantedArray > 0){
+          throw new Error(`This Freight order id cannot be cancelled ${referenceNo}`)
+        }
+
         const filteredArray = headerResult
           .filter((obj) => ['WEB'].includes(obj.FK_OrderStatusId) && obj.Housebill)
           .map((obj) => obj.Housebill);
@@ -148,7 +155,7 @@ async function getHousebills(referenceNo) {
 
     return housebillArray;
   } catch (error) {
-    console.error('Error while fetching housebill');
+    console.error('Error while fetching housebill', error);
     throw error;
   }
 }
