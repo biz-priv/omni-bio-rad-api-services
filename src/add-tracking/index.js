@@ -124,14 +124,14 @@ async function getFileNumbers(referenceNo) {
     };
     const referenceResult = await getData(referenceParams);
     if(referenceResult.length === 0){
-        throw new Error(`There is no data for the given freigth order Id: ${referenceNo}`)
+        throw new Error(`Inserted data into references but there is no data for the given freigth order Id: ${referenceNo}`)
     }
     const fileNumbers = referenceResult.map(item => get(item, 'FK_OrderNo', ''))
     return fileNumbers
 
   } catch (error) {
     console.info('Error while fetching file numbers based on referenceNo', error);
-    throw new Error(`Error while fetching file numbers based on referenceNo: ${error}`);
+    throw error;
   }
 }
 
@@ -169,8 +169,8 @@ async function preparePayload(fileNumber){
           </soap:Envelope>`;
           return payload;
     }catch(error){
-        console.error(error)
-        throw new Error(`Error while preparing payload for fileNumber: ${fileNumber}, Error: ${error}`)
+        console.error(`Error while preparing payload for fileNumber: ${fileNumber}, Error: ${error}`)
+        throw error;
     }
 }
 
@@ -195,7 +195,7 @@ async function sendToWT(postData) {
     dynamoData.XmlResponsePayload = get(res, 'data');
     throw new Error(`World trak API Request Failed: ${res}`);
   } catch (error) {
-    console.error('send to WT', error);
-    throw new Error(`World trak API Request Failed: ${error}`);
+    console.error(`World trak API Request Failed: ${error}`);
+    throw error;
   }
 }
