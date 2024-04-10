@@ -26,9 +26,9 @@ module.exports.handler = async (event, context) => {
   // console.info(event);
 
   try {
-    const eventBody = JSON.parse(get(event, 'body', {}));
+    // const eventBody = JSON.parse(get(event, 'body', {}));
 
-    // const eventBody = get(event, 'body', {});
+    const eventBody = get(event, 'body', {});
 
     // Set the time zone to CST
     const cstDate = moment().tz('America/Chicago');
@@ -44,6 +44,7 @@ module.exports.handler = async (event, context) => {
     dynamoData.CallInPhone = `${get(eventBody, 'orderingParty.address.phoneNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.phoneNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.phoneNumber.subscriberId', '')}`;
     dynamoData.CallInFax = `${get(eventBody, 'orderingParty.address.faxNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.faxNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.faxNumber.subscriberId', '')}`;
     dynamoData.QuoteContactEmail = get(eventBody, 'orderingParty.address.emailAddress', '');
+    dynamoData.XmlPayload = []
 
     console.info(dynamoData.CSTDateTime);
 
@@ -56,8 +57,10 @@ module.exports.handler = async (event, context) => {
     const groupedItems = await groupItems(items);
     console.info(groupedItems);
     const groupedItemKeys = Object.keys(groupedItems);
-    const apiResponses = await Promise.all(
-      groupedItemKeys.map(async (key) => {
+    // const apiResponses = await Promise.all(
+    //   groupedItemKeys.map(async (key) => {
+    const apiResponses = []
+    for(const key of groupedItemKeys){
         const loadingStage = transportationStages.find(
           (obj) => get(obj, 'loadingLocation.id', '') === key.split('-')[0]
         );
@@ -122,6 +125,7 @@ module.exports.handler = async (event, context) => {
           serviceLevel
         );
         console.info(xmlPayload);
+        dynamoData.XmlPayload.push(xmlPayload)
 
         const xmlResponse = await sendToWT(xmlPayload);
 
@@ -158,9 +162,11 @@ module.exports.handler = async (event, context) => {
           'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.ShipQuoteNo',
           ''
         );
-        return { housebill, fileNumber };
-      })
-    );
+        apiResponses.push({ housebill, fileNumber })
+        // return { housebill, fileNumber };
+      }
+    //   })
+    // );
     console.info(apiResponses);
     dynamoData.ShipmentData = apiResponses;
     dynamoData.FileNumber = apiResponses.map((obj) => obj.fileNumber);
@@ -172,7 +178,7 @@ module.exports.handler = async (event, context) => {
       })
     );
 
-    dynamoData.Status = 'SUCCESS';
+    dynamoData.Status = 'PENDING';
     await putLogItem(dynamoData);
     return {
       statusCode: 200,
