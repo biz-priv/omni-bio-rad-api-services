@@ -165,12 +165,12 @@ module.exports.handler = async (event, context) => {
     dynamoData.ShipmentData = apiResponses;
     dynamoData.FileNumber = apiResponses.map((obj) => obj.fileNumber);
     dynamoData.Housebill = apiResponses.map((obj) => obj.fileNumber);
-    const eventArray = ['sendToLbn', 'updateDb'];
-    await Promise.all(
-      eventArray.map(async (eventType) => {
-        await sendToLbnAndUpdateInSourceDb(eventType, apiResponses);
-      })
-    );
+    // const eventArray = ['sendToLbn', 'updateDb'];
+    // await Promise.all(
+    //   eventArray.map(async (eventType) => {
+    //     await sendToLbnAndUpdateInSourceDb(eventType, apiResponses);
+    //   })
+    // );
 
     dynamoData.Status = 'SUCCESS';
     await putLogItem(dynamoData);
