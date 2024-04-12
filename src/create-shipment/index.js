@@ -23,7 +23,7 @@ const sns = new AWS.SNS();
 const dynamoData = {};
 
 module.exports.handler = async (event, context) => {
-  // console.info(event);
+  console.info(event);
 
   try {
     const eventBody = JSON.parse(get(event, 'body', {}));
@@ -44,23 +44,27 @@ module.exports.handler = async (event, context) => {
     dynamoData.CallInPhone = `${get(eventBody, 'orderingParty.address.phoneNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.phoneNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.phoneNumber.subscriberId', '')}`;
     dynamoData.CallInFax = `${get(eventBody, 'orderingParty.address.faxNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.faxNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.faxNumber.subscriberId', '')}`;
     dynamoData.QuoteContactEmail = get(eventBody, 'orderingParty.address.emailAddress', '');
-    dynamoData.XmlPayload = []
+    dynamoData.XmlPayload = [];
 
+    if(get(dynamoData, 'FreightOrderId', '') === '' || get(dynamoData, 'OrderingPartyLbnId', '') === '' || get(dynamoData, 'CarrierPartyLbnId', '') === ''){
+      throw new Error('FreightOrderId or OrderingPartyLbnId or CarrierPartyLbnId is missing in the request, please add the details in the request.')
+    }
     console.info(dynamoData.CSTDateTime);
 
     const headerData = await prepareHeaderData(eventBody);
-    // console.info(headerData);
+    console.info(headerData);
 
     const transportationStages = get(eventBody, 'transportationStages', []);
     const items = get(eventBody, 'items', []);
 
+    // group the items to understand how many shipments were exist in the request.
     const groupedItems = await groupItems(items);
     console.info(groupedItems);
     const groupedItemKeys = Object.keys(groupedItems);
-    // const apiResponses = await Promise.all(
-    //   groupedItemKeys.map(async (key) => {
-    const apiResponses = []
-    for(const key of groupedItemKeys){
+
+    // Prepare all the payloads at once(which helps in multi shipment scenario)
+    const wtPayloads = await Promise.all(
+      groupedItemKeys.map(async (key) => {
         const loadingStage = transportationStages.find(
           (obj) => get(obj, 'loadingLocation.id', '') === key.split('-')[0]
         );
@@ -125,52 +129,59 @@ module.exports.handler = async (event, context) => {
           serviceLevel
         );
         console.info(xmlPayload);
-        dynamoData.XmlPayload.push(xmlPayload)
+        dynamoData.XmlPayload.push(xmlPayload);
+        return xmlPayload;
 
-        const xmlResponse = await sendToWT(xmlPayload);
+      })
+    );
+    console.info(wtPayloads);
+    const apiResponses = [];
 
-        const xmlObjResponse = await xmlJsonConverter(xmlResponse);
+    // Send the payloads to world trak for shipment creation one by one as it doesn't allow conurrent executions.
+    for (const payload of wtPayloads) {
+      const xmlResponse = await sendToWT(payload);
 
-        if (
-          get(
-            xmlObjResponse,
-            'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.ErrorMessage',
-            ''
-          ) !== '' ||
-          get(
-            xmlObjResponse,
-            'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.Housebill',
-            ''
-          ) === ''
-        ) {
-          throw new Error(
-            `WORLD TRAK API call failed: ${get(
-              xmlObjResponse,
-              'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.ErrorMessage',
-              ''
-            )}`
-          );
-        }
+      const xmlObjResponse = await xmlJsonConverter(xmlResponse);
 
-        const housebill = get(
+      if (
+        get(
+          xmlObjResponse,
+          'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.ErrorMessage',
+          ''
+        ) !== '' ||
+        get(
           xmlObjResponse,
           'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.Housebill',
           ''
+        ) === ''
+      ) {
+        throw new Error(
+          `WORLD TRAK API call failed: ${get(
+            xmlObjResponse,
+            'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.ErrorMessage',
+            ''
+          )}`
         );
-        const fileNumber = get(
-          xmlObjResponse,
-          'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.ShipQuoteNo',
-          ''
-        );
-        apiResponses.push({ housebill, fileNumber })
-        // return { housebill, fileNumber };
       }
-    //   })
-    // );
+
+      const housebill = get(
+        xmlObjResponse,
+        'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.Housebill',
+        ''
+      );
+      const fileNumber = get(
+        xmlObjResponse,
+        'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.ShipQuoteNo',
+        ''
+      );
+      apiResponses.push({ housebill, fileNumber });
+    }
     console.info(apiResponses);
     dynamoData.ShipmentData = apiResponses;
     dynamoData.FileNumber = apiResponses.map((obj) => obj.fileNumber);
     dynamoData.Housebill = apiResponses.map((obj) => obj.fileNumber);
+
+    // send back the created shipment to LBN(which is customers endpoint) and update couple of fields in source Db.
     const eventArray = ['sendToLbn', 'updateDb'];
     await Promise.all(
       eventArray.map(async (eventType) => {
@@ -178,7 +189,7 @@ module.exports.handler = async (event, context) => {
       })
     );
 
-    dynamoData.Status = 'PENDING';
+    dynamoData.Status = 'SUCCESS';
     await putLogItem(dynamoData);
     return {
       statusCode: 200,

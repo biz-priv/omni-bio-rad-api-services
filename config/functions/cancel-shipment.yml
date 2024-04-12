@@ -7,10 +7,10 @@ function:
   layers:
     - { Ref: NodeModulesLambdaLayer }
   package:
-    include:
-      - 'src/cancel-shipment/**'
-    exclude:
-      - '**/*'
+    patterns:
+      - '!**/*'
+      - src/cancel-shipment/**
+      - src/Shared/**
   events:
     - http:
         path: /LbnFreightOrderForSubcontracting/{orderingPartyLbnId}/{originatorId}/{freightOrderId}/cancellation

@@ -25,6 +25,7 @@ module.exports.handler = async (event, context) => {
     dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
     dynamoData.Event = get(event, 'body', '');
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
+    dynamoData.Process = 'ADD_TRACKING';
     dynamoData.FreightOrderId = get(eventBody, 'shipment.orderId', '');
     dynamoData.OrderingPartyLbnId = get(eventBody, 'shipper.shipperLBNID', '');
     dynamoData.CarrierPartyLbnId = get(eventBody, 'carrier.carrierLBNID', '');
@@ -51,12 +52,14 @@ module.exports.handler = async (event, context) => {
 
     const fileNumbers = await getFileNumbers(get(dynamoData, 'FreightOrderId', ''));
 
-    await Promise.all(fileNumbers.map(async (fileNumber)=>{
-        console.info(fileNumber)
+    await Promise.all(
+      fileNumbers.map(async (fileNumber) => {
+        console.info(fileNumber);
         const payload = await preparePayload(fileNumber);
-        console.info(payload)
+        console.info(payload);
         await sendToWT(payload);
-    }))
+      })
+    );
 
     return {
       statusCode: 200,
@@ -123,31 +126,32 @@ async function getFileNumbers(referenceNo) {
       },
     };
     const referenceResult = await getData(referenceParams);
-    if(referenceResult.length === 0){
-        throw new Error(`Inserted data into references but there is no data for the given freigth order Id: ${referenceNo}`)
+    if (referenceResult.length === 0) {
+      throw new Error(
+        `Inserted data into references but there is no data for the given freigth order Id: ${referenceNo}`
+      );
     }
-    const fileNumbers = referenceResult.map(item => get(item, 'FK_OrderNo', ''))
-    return fileNumbers
-
+    const fileNumbers = referenceResult.map((item) => get(item, 'FK_OrderNo', ''));
+    return fileNumbers;
   } catch (error) {
     console.info('Error while fetching file numbers based on referenceNo', error);
     throw error;
   }
 }
 
-async function preparePayload(fileNumber){
-    try{
-        const shipmentHeaderParams = {
-            TableName: process.env.SHIPMENT_HEADER_TABLE,
-            KeyConditionExpression: 'PK_OrderNo = :PK_OrderNo',
-            ExpressionAttributeValues: {
-              ':PK_OrderNo': fileNumber,
-            },
-          };
-          const shipmentHeaderResult = await getData(shipmentHeaderParams);
-          const housebill = get(shipmentHeaderResult, '[0].Housebill', '');
+async function preparePayload(fileNumber) {
+  try {
+    const shipmentHeaderParams = {
+      TableName: process.env.SHIPMENT_HEADER_TABLE,
+      KeyConditionExpression: 'PK_OrderNo = :PK_OrderNo',
+      ExpressionAttributeValues: {
+        ':PK_OrderNo': fileNumber,
+      },
+    };
+    const shipmentHeaderResult = await getData(shipmentHeaderParams);
+    const housebill = get(shipmentHeaderResult, '[0].Housebill', '');
 
-          const payload = `<?xml version="1.0"?>
+    const payload = `<?xml version="1.0"?>
           <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
             <soap:Header>
               <AuthHeader xmlns="http://tempuri.org/">
@@ -167,11 +171,11 @@ async function preparePayload(fileNumber){
               </WriteTrackingNote>
             </soap:Body>
           </soap:Envelope>`;
-          return payload;
-    }catch(error){
-        console.error(`Error while preparing payload for fileNumber: ${fileNumber}, Error: ${error}`)
-        throw error;
-    }
+    return payload;
+  } catch (error) {
+    console.error(`Error while preparing payload for fileNumber: ${fileNumber}, Error: ${error}`);
+    throw error;
+  }
 }
 
 async function sendToWT(postData) {

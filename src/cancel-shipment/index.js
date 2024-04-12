@@ -16,6 +16,9 @@ module.exports.handler = async (event, context) => {
   try {
     console.info(event);
 
+    const eventBody = JSON.parse(get(event, 'body', {}));
+    // const eventBody = get(event, 'body', {});
+
     // Set the time zone to CST
     const cstDate = moment().tz('America/Chicago');
     dynamoData.CSTDate = cstDate.format('YYYY-MM-DD');
@@ -24,36 +27,37 @@ module.exports.handler = async (event, context) => {
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
     dynamoData.Process = 'CANCEL';
     dynamoData.XmlPayload = {};
+    dynamoData.XmlResponse = {}
 
-    const eventBody = get(event, 'body', {});
-
-    const freightOrderId = get(eventBody, 'freightOrderId', '');
-    dynamoData.FreightOrderId = freightOrderId;
-    if (freightOrderId === '' || freightOrderId === null) {
-      throw new Error('Error, Please provide freightOrderId');
+    let freightOrderId = ''
+    if(get(eventBody, 'freightOrderId', '') === ''){
+      if(get(event, 'pathParameters.freightOrderId', '') === ''){
+        throw new Error('Error, FreightOrderId is missing in the request.');
+      }else{
+        freightOrderId = get(event, 'pathParameters.freightOrderId', '');
+      }
+    }else{
+      freightOrderId = get(eventBody, 'freightOrderId', '')
     }
+    dynamoData.FreightOrderId = freightOrderId;
     const housebillArray = await getHousebills(freightOrderId);
+    console.info(housebillArray)
     if (housebillArray.length === 0) {
-      throw new Error(`Error, housebill not found for the given freightOrderId: ${freightOrderId}`);
+      throw new Error(`Error, No housebills were found for the given freightOrderId: ${freightOrderId}`);
     }
     dynamoData.HousebillArray = housebillArray;
 
-    const skippedHousebills = [];
-    const responses = {};
+    const cancelledHousebills = [];
     await Promise.all(
       housebillArray.map(async (housebill) => {
-        if (skippedHousebills.includes(housebill)) {
+        if (cancelledHousebills.includes(housebill)) {
           return;
         }
-        skippedHousebills.push(housebill);
-        const result = await addMilestoneApiCall(housebill);
-        responses[housebill] = result;
+        cancelledHousebills.push(housebill);
+        await cancelShipmentApiCall(housebill);
       })
     );
-    dynamoData.Responses = responses;
-
-    console.info(dynamoData);
-
+    dynamoData.Status = 'SUCCESS';
     await putLogItem(dynamoData);
     return {
       statusCode: 200,
@@ -99,7 +103,7 @@ module.exports.handler = async (event, context) => {
       body: JSON.stringify(
         {
           responseId: dynamoData.Id,
-          message: error,
+          message: errorMsgVal,
         },
         null,
         2
@@ -123,7 +127,7 @@ async function getHousebills(referenceNo) {
 
     const referenceResult = await getData(referenceParams);
     if (referenceResult.length === 0) {
-      throw new Error(`Error, Order number not found for the given freightOrderId: ${referenceNo}`);
+      throw new Error(`Error, FreightOrderId is not valid, freightOrderId: ${referenceNo}`);
     }
 
     // get all the housebill from the above order nos
@@ -139,10 +143,11 @@ async function getHousebills(referenceNo) {
         };
         const headerResult = await getData(headerParams);
 
-        const unwantedArray = headerResult
-        .filter((obj) => !['WEB', 'CAN'].includes(obj.FK_OrderStatusId));
-        if(unwantedArray > 0){
-          throw new Error(`This Freight order id cannot be cancelled ${referenceNo}`)
+        const unwantedArray = headerResult.filter(
+          (obj) => !['WEB', 'CAN'].includes(obj.FK_OrderStatusId)
+        );
+        if (unwantedArray > 0) {
+          throw new Error(`Error, Provided freightOrderId cannot be cancelled ${referenceNo}.`);
         }
 
         const filteredArray = headerResult
@@ -160,7 +165,7 @@ async function getHousebills(referenceNo) {
   }
 }
 
-async function addMilestoneApiCall(housebill) {
+async function cancelShipmentApiCall(housebill) {
   try {
     const xmlString = `<?xml version="1.0" encoding="utf-8"?>
     <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
@@ -186,13 +191,13 @@ async function addMilestoneApiCall(housebill) {
     };
 
     console.info('config: ', config);
-
     const res = await axios.request(config);
     let message = '';
     if (get(res, 'status', '') !== 200) {
       console.info(get(res, 'data', ''));
       throw new Error(`API Request Failed: ${res}`);
     } else {
+      dynamoData.XmlResponse[housebill] = get(res, 'data', '')
       // Verify if the WT api request is success or failed
       const response = await xmlJsonConverter(get(res, 'data', ''));
       message = get(
