@@ -61,6 +61,8 @@ module.exports.handler = async (event, context) => {
       })
     );
 
+    dynamoData.Status = 'SUCCESS';
+    await putLogItem(dynamoData);
     return {
       statusCode: 200,
       body: JSON.stringify(

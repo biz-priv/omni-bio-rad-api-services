@@ -91,16 +91,21 @@ module.exports.handler = async (event, context) => {
           );
         } else if (get(stage, 'totalDuration.value', '') !== '') {
           const totalDuration = moment.duration(get(stage, 'totalDuration.value', '')).asHours();
-          const serviceLevelValue = get(CONSTANTS, 'serviceLevel', []).find(
-            (obj) => totalDuration > obj.min && totalDuration <= obj.max
-          );
-          serviceLevel = get(serviceLevelValue, 'value', '');
+          if(totalDuration === 0){
+            serviceLevel = 'ND'
+          } else if(totalDuration > 120){
+            serviceLevel = 'E7'
+          }else{
+            const serviceLevelValue = get(CONSTANTS, 'serviceLevel', []).find(
+              (obj) => totalDuration > obj.min && totalDuration <= obj.max
+            );
+            serviceLevel = get(serviceLevelValue, 'value', '');
+          }
         } else {
           throw new Error(
             `Cannot get the total duration from the connecting stages, please provide the total duration for this shipment from ${get(loadingStage, 'loadingLocation.id', '')} to ${get(unloadingStage, 'unloadingLocation.id', '')}`
           );
         }
-
         const shipperAndConsignee = await prepareShipperAndConsigneeData(
           loadingStage,
           unloadingStage
