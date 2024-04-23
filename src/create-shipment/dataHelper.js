@@ -21,8 +21,8 @@ const CONSTANTS = {
     PDT: -2,
   },
   station: {
-    CA: 'YYZ',
-    US: 'SFO',
+    CA: 'T09',
+    US: 'T06',
   },
   billNo: {
     CA: '8061',
@@ -73,7 +73,7 @@ async function prepareShipperAndConsigneeData(loadingStage, unloadingStage) {
     ShipperState: get(loadingStage, 'loadingLocation.address.region', ''),
     ShipperCountry: get(loadingStage, 'loadingLocation.address.country', ''),
     ShipperZip: get(loadingStage, 'loadingLocation.address.postalCode', ''),
-    ShipperPhone: `+${get(loadingStage, 'loadingLocation.address.phoneNumber.countryDialingCode', '')} ${get(loadingStage, 'loadingLocation.address.phoneNumber.areaId', '')} ${get(loadingStage, 'loadingLocation.address.phoneNumber.subscriberId', '')}`,
+    ShipperPhone: `${get(loadingStage, 'loadingLocation.address.phoneNumber.countryDialingCode', '')} ${get(loadingStage, 'loadingLocation.address.phoneNumber.areaId', '')} ${get(loadingStage, 'loadingLocation.address.phoneNumber.subscriberId', '')}`,
     ShipperFax: get(loadingStage, 'loadingLocation.address.faxNumber.subscriberId', ''),
     ShipperEmail: get(loadingStage, 'loadingLocation.address.emailAddress', ''),
     ConsigneeName: get(unloadingStage, 'unloadingLocation.address.name', ''),
@@ -82,7 +82,7 @@ async function prepareShipperAndConsigneeData(loadingStage, unloadingStage) {
     ConsigneeState: get(unloadingStage, 'unloadingLocation.address.region', ''),
     ConsigneeCountry: get(unloadingStage, 'unloadingLocation.address.country', ''),
     ConsigneeZip: get(unloadingStage, 'unloadingLocation.address.postalCode', ''),
-    ConsigneePhone: `+${get(unloadingStage, 'unloadingLocation.address.phoneNumber.countryDialingCode', '')} ${get(unloadingStage, 'unloadingLocation.address.phoneNumber.areaId', '')} ${get(unloadingStage, 'unloadingLocation.address.phoneNumber.subscriberId', '')}`,
+    ConsigneePhone: `${get(unloadingStage, 'unloadingLocation.address.phoneNumber.countryDialingCode', '')} ${get(unloadingStage, 'unloadingLocation.address.phoneNumber.areaId', '')} ${get(unloadingStage, 'unloadingLocation.address.phoneNumber.subscriberId', '')}`,
     ConsigneeFax: get(unloadingStage, 'unloadingLocation.address.faxNumber.subscriberId', ''),
     ConsigneeEmail: get(unloadingStage, 'unloadingLocation.address.emailAddress', ''),
     BillToAcct: get(
