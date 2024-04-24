@@ -44,10 +44,10 @@ module.exports.handler = async (event, context) => {
     dynamoData.CallInPhone = `${get(eventBody, 'orderingParty.address.phoneNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.phoneNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.phoneNumber.subscriberId', '')}`;
     dynamoData.CallInFax = `${get(eventBody, 'orderingParty.address.faxNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.faxNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.faxNumber.subscriberId', '')}`;
     dynamoData.QuoteContactEmail = get(eventBody, 'orderingParty.address.emailAddress', '');
-    dynamoData.XmlPayload = [];
+    dynamoData.XmlPayload = {};
 
     if(get(dynamoData, 'FreightOrderId', '') === '' || get(dynamoData, 'OrderingPartyLbnId', '') === '' || get(dynamoData, 'CarrierPartyLbnId', '') === ''){
-      throw new Error('FreightOrderId or OrderingPartyLbnId or CarrierPartyLbnId is missing in the request, please add the details in the request.')
+      throw new Error('Error, FreightOrderId or OrderingPartyLbnId or CarrierPartyLbnId is missing in the request, please add the details in the request.')
     }
     console.info(dynamoData.CSTDateTime);
 
@@ -63,7 +63,7 @@ module.exports.handler = async (event, context) => {
     const groupedItemKeys = Object.keys(groupedItems);
 
     // Prepare all the payloads at once(which helps in multi shipment scenario)
-    const wtPayloads = await Promise.all(
+    const wtPayloadsData = await Promise.all(
       groupedItemKeys.map(async (key) => {
         const loadingStage = transportationStages.find(
           (obj) => get(obj, 'loadingLocation.id', '') === key.split('-')[0]
@@ -125,7 +125,7 @@ module.exports.handler = async (event, context) => {
         );
         console.info(dateValues);
 
-        const xmlPayload = await prepareWTPayload(
+        const payloads = await prepareWTPayload(
           headerData,
           shipperAndConsignee,
           referenceList,
@@ -133,18 +133,16 @@ module.exports.handler = async (event, context) => {
           dateValues,
           serviceLevel
         );
-        console.info(xmlPayload);
-        dynamoData.XmlPayload.push(xmlPayload);
-        return xmlPayload;
-
+        console.info(payloads);
+        return {...payloads, stopId: key};
       })
     );
-    console.info(wtPayloads);
+    console.info(wtPayloadsData);
     const apiResponses = [];
 
     // Send the payloads to world trak for shipment creation one by one as it doesn't allow conurrent executions.
-    for (const payload of wtPayloads) {
-      const xmlResponse = await sendToWT(payload);
+    for (const data of wtPayloadsData) {
+      const xmlResponse = await sendToWT(get(data, 'jsonPayload'));
 
       const xmlObjResponse = await xmlJsonConverter(xmlResponse);
 
@@ -179,6 +177,8 @@ module.exports.handler = async (event, context) => {
         'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.ShipQuoteNo',
         ''
       );
+
+      dynamoData.XmlPayload[get(data, 'stopId')] = data;
       apiResponses.push({ housebill, fileNumber });
     }
     console.info(apiResponses);

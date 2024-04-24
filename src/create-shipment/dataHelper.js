@@ -249,7 +249,7 @@ async function prepareWTPayload(
         },
       },
     });
-    return xmlPayload;
+    return {xmlPayload, jsonPayload: finalData};
   } catch (error) {
     console.error('Error while preparing payload ', error);
     throw error;

@@ -1,0 +1,18 @@
+---
+function:
+  name: omni-bio-rad-update-shipment-processor-${self:provider.stage}
+  handler: src/update-shipment-processor/index.handler
+  runtime: nodejs20.x
+  timeout: 30
+  layers:
+    - { Ref: NodeModulesLambdaLayer }
+  package:
+    patterns:
+      - '!**/*'
+      - src/update-shipment-processor/**
+      - src/Shared/**
+  events:
+    - http:
+        path: /LbnFreightOrderForSubcontracting/{orderingPartyLbnId}/{originatorId}/{freightOrderId}
+        method: PUT
+        private: true
