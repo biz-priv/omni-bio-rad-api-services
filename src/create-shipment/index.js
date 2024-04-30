@@ -46,8 +46,14 @@ module.exports.handler = async (event, context) => {
     dynamoData.QuoteContactEmail = get(eventBody, 'orderingParty.address.emailAddress', '');
     dynamoData.XmlPayload = {};
 
-    if(get(dynamoData, 'FreightOrderId', '') === '' || get(dynamoData, 'OrderingPartyLbnId', '') === '' || get(dynamoData, 'CarrierPartyLbnId', '') === ''){
-      throw new Error('Error, FreightOrderId or OrderingPartyLbnId or CarrierPartyLbnId is missing in the request, please add the details in the request.')
+    if (
+      get(dynamoData, 'FreightOrderId', '') === '' ||
+      get(dynamoData, 'OrderingPartyLbnId', '') === '' ||
+      get(dynamoData, 'CarrierPartyLbnId', '') === ''
+    ) {
+      throw new Error(
+        'Error, FreightOrderId or OrderingPartyLbnId or CarrierPartyLbnId is missing in the request, please add the details in the request.'
+      );
     }
     console.info(dynamoData.CSTDateTime);
 
@@ -91,11 +97,11 @@ module.exports.handler = async (event, context) => {
           );
         } else if (get(stage, 'totalDuration.value', '') !== '') {
           const totalDuration = moment.duration(get(stage, 'totalDuration.value', '')).asHours();
-          if(totalDuration === 0){
-            serviceLevel = 'ND'
-          } else if(totalDuration > 120){
-            serviceLevel = 'E7'
-          }else{
+          if (totalDuration === 0) {
+            serviceLevel = 'ND';
+          } else if (totalDuration > 120) {
+            serviceLevel = 'E7';
+          } else {
             const serviceLevelValue = get(CONSTANTS, 'serviceLevel', []).find(
               (obj) => totalDuration > obj.min && totalDuration <= obj.max
             );
@@ -134,7 +140,7 @@ module.exports.handler = async (event, context) => {
           serviceLevel
         );
         console.info(payloads);
-        return {...payloads, stopId: key};
+        return { ...payloads, stopId: key };
       })
     );
     console.info(wtPayloadsData);
@@ -142,7 +148,7 @@ module.exports.handler = async (event, context) => {
 
     // Send the payloads to world trak for shipment creation one by one as it doesn't allow conurrent executions.
     for (const data of wtPayloadsData) {
-      const xmlResponse = await sendToWT(get(data, 'jsonPayload'));
+      const xmlResponse = await sendToWT(get(data, 'xmlPayload'));
 
       const xmlObjResponse = await xmlJsonConverter(xmlResponse);
 
@@ -177,7 +183,7 @@ module.exports.handler = async (event, context) => {
         'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.ShipQuoteNo',
         ''
       );
-
+   
       dynamoData.XmlPayload[get(data, 'stopId')] = data;
       apiResponses.push({ housebill, fileNumber });
     }

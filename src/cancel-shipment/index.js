@@ -27,23 +27,25 @@ module.exports.handler = async (event, context) => {
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
     dynamoData.Process = 'CANCEL';
     dynamoData.XmlPayload = {};
-    dynamoData.XmlResponse = {}
+    dynamoData.XmlResponse = {};
 
-    let freightOrderId = ''
-    if(get(eventBody, 'freightOrderId', '') === ''){
-      if(get(event, 'pathParameters.freightOrderId', '') === ''){
+    let freightOrderId = '';
+    if (get(eventBody, 'freightOrderId', '') === '') {
+      if (get(event, 'pathParameters.freightOrderId', '') === '') {
         throw new Error('Error, FreightOrderId is missing in the request.');
-      }else{
+      } else {
         freightOrderId = get(event, 'pathParameters.freightOrderId', '');
       }
-    }else{
-      freightOrderId = get(eventBody, 'freightOrderId', '')
+    } else {
+      freightOrderId = get(eventBody, 'freightOrderId', '');
     }
     dynamoData.FreightOrderId = freightOrderId;
     const housebillArray = await getHousebills(freightOrderId);
-    console.info(housebillArray)
+    console.info(housebillArray);
     if (housebillArray.length === 0) {
-      throw new Error(`Error, No housebills were found for the given freightOrderId: ${freightOrderId}`);
+      throw new Error(
+        `Error, No housebills were found for the given freightOrderId: ${freightOrderId}`
+      );
     }
     dynamoData.HousebillArray = housebillArray;
 
@@ -197,7 +199,7 @@ async function cancelShipmentApiCall(housebill) {
       console.info(get(res, 'data', ''));
       throw new Error(`API Request Failed: ${res}`);
     } else {
-      dynamoData.XmlResponse[housebill] = get(res, 'data', '')
+      dynamoData.XmlResponse[housebill] = get(res, 'data', '');
       // Verify if the WT api request is success or failed
       const response = await xmlJsonConverter(get(res, 'data', ''));
       message = get(
