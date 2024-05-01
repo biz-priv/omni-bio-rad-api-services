@@ -2,7 +2,7 @@
 
 const { get } = require('lodash');
 const moment = require('moment-timezone');
-const xml2js = require('xml2js');
+const xml_js = require('xml-js');
 
 const CONSTANTS = {
   mode: { 17: 'Domestic', 18: 'Truckload' },
@@ -206,49 +206,90 @@ async function prepareWTPayload(
   serviceLevel
 ) {
   try {
+    // const finalData = {
+    //   ...headerData,
+    //   ...shipperAndConsignee,
+    //   ...referenceList,
+    //   ...shipmentLineList,
+    //   ...dateValues,
+    //   ServiceLevel: serviceLevel,
+    // };
+
+    // console.info('finalData: ', finalData)
+
     const finalData = {
-      ...headerData,
-      ...shipperAndConsignee,
-      ...referenceList,
-      ...shipmentLineList,
-      ...dateValues,
-      ServiceLevel: serviceLevel,
-    };
-
-    const xmlBuilder = new xml2js.Builder({
-      render: {
-        pretty: true,
-        indent: '    ',
-        newline: '\n',
+      '_declaration': {
+        _attributes: {
+          version: '1.0',
+          encoding: 'UTF-8',
+          standalone: 'yes',
+        },
       },
-    });
-
-    const xmlPayload = xmlBuilder.buildObject({
       'soap12:Envelope': {
-        '$': {
+        '_attributes': {
           'xmlns:xsi': 'http://www.w3.org/2001/XMLSchema-instance',
           'xmlns:xsd': 'http://www.w3.org/2001/XMLSchema',
           'xmlns:soap12': 'http://schemas.xmlsoap.org/soap/envelope/',
         },
         'soap12:Header': {
           AuthHeader: {
-            $: {
+            _attributes: {
               xmlns: 'http://tempuri.org/',
             },
-            UserName: 'saplbn',
-            Password: 'saplbn',
+            UserName: {
+              _text: 'saplbn',
+            },
+            Password: {
+              _text: 'saplbn',
+            },
           },
         },
         'soap12:Body': {
           AddNewShipmentV3: {
-            $: {
+            _attributes: {
               xmlns: 'http://tempuri.org/',
             },
-            oShipData: finalData,
+            oShipData: {
+              ...headerData,
+              ...shipperAndConsignee,
+              ...referenceList,
+              ...shipmentLineList,
+              ...dateValues,
+              ServiceLevel: serviceLevel,
+            },
           },
         },
       },
-    });
+    };
+
+    const xmlPayload = xml_js.json2xml(finalData, { compact: true, spaces: 2, sanitize: false });
+
+    // const xmlPayload = xmlBuilder.buildObject({
+    //   'soap12:Envelope': {
+    //     '$': {
+    //       'xmlns:xsi': 'http://www.w3.org/2001/XMLSchema-instance',
+    //       'xmlns:xsd': 'http://www.w3.org/2001/XMLSchema',
+    //       'xmlns:soap12': 'http://schemas.xmlsoap.org/soap/envelope/',
+    //     },
+    //     'soap12:Header': {
+    //       AuthHeader: {
+    //         $: {
+    //           xmlns: 'http://tempuri.org/',
+    //         },
+    //         UserName: 'saplbn',
+    //         Password: 'saplbn',
+    //       },
+    //     },
+    //     'soap12:Body': {
+    //       AddNewShipmentV3: {
+    //         $: {
+    //           xmlns: 'http://tempuri.org/',
+    //         },
+    //         oShipData: finalData,
+    //       },
+    //     },
+    //   },
+    // });
     return { xmlPayload, jsonPayload: finalData };
   } catch (error) {
     console.error('Error while preparing payload ', error);

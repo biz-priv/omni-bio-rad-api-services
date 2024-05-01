@@ -182,14 +182,14 @@ module.exports.handler = async (event, context) => {
       })
     );
     console.info(updateResponses);
-    dynamoData.ShipmentUpdates = updateResponses
+    dynamoData.ShipmentUpdates = updateResponses;
     if (updateResponses.length > 0) {
       dynamoData.Status = 'PENDING';
     } else {
       dynamoData.Status = 'SUCCESS';
     }
 
-    console.info(dynamoData)
+    console.info(dynamoData);
     await putLogItem(dynamoData);
     return {
       statusCode: 200,

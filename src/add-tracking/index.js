@@ -67,8 +67,7 @@ module.exports.handler = async (event, context) => {
       statusCode: 200,
       body: JSON.stringify(
         {
-          responseId: get(dynamoData, 'Id', ''),
-          Message: 'Success',
+          trackId: dynamoData.housebill,
         },
         null,
         2
@@ -152,6 +151,8 @@ async function preparePayload(fileNumber) {
     };
     const shipmentHeaderResult = await getData(shipmentHeaderParams);
     const housebill = get(shipmentHeaderResult, '[0].Housebill', '');
+
+    dynamoData.housebill = housebill;
 
     const payload = `<?xml version="1.0"?>
           <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">

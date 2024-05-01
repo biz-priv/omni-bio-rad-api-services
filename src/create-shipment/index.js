@@ -140,6 +140,7 @@ module.exports.handler = async (event, context) => {
           serviceLevel
         );
         console.info(payloads);
+        dynamoData[key] = payloads;
         return { ...payloads, stopId: key };
       })
     );
@@ -183,8 +184,10 @@ module.exports.handler = async (event, context) => {
         'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.ShipQuoteNo',
         ''
       );
-   
+
       dynamoData.XmlPayload[get(data, 'stopId')] = data;
+      dynamoData.XmlPayload[get(data, 'stopId')].housebill = housebill;
+      dynamoData.XmlPayload[get(data, 'stopId')].fileNumber = fileNumber;
       apiResponses.push({ housebill, fileNumber });
     }
     console.info(apiResponses);
