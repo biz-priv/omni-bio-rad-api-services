@@ -188,6 +188,7 @@ module.exports.handler = async (event, context) => {
       dynamoData.XmlPayload[get(data, 'stopId')] = data;
       dynamoData.XmlPayload[get(data, 'stopId')].housebill = housebill;
       dynamoData.XmlPayload[get(data, 'stopId')].fileNumber = fileNumber;
+      dynamoData.XmlPayload[get(data, 'stopId')].XmlResponse = xmlResponse;
       apiResponses.push({ housebill, fileNumber });
     }
     console.info(apiResponses);
@@ -299,23 +300,53 @@ async function sendToLbnAndUpdateInSourceDb(eventType, responses) {
       console.info(apiResult);
     } else {
       const token = await getLbnToken();
-      const businessDocumentReferences = responses.map((response) => {
-        return {
-          documentId: get(response, 'housebill', ''),
+      const businessDocumentReferences = [];
+
+      for (const response of responses) {
+        const housebill = get(response, 'housebill', '');
+        const { filename, b64str } = await getDocFromWebsli({ housebill });
+
+        businessDocumentReferences.push({
+          documentId: housebill,
           documentTypeCode: 'T51',
-        };
-      });
+          attachments: [
+            {
+              name: filename,
+              mimeCode: 'application/pdf',
+              fileContentBinaryObject: b64str
+            }
+          ]
+        });
+      }
+
       const payload = {
         carrierPartyLbnId: get(dynamoData, 'CarrierPartyLbnId', ''),
         confirmationStatus: 'CN',
         businessDocumentReferences,
       };
 
+      dynamoData.LbnPayload = payload
+
       console.info('lbn send Payload: ', JSON.stringify(payload));
       await sendToLbn(token, payload);
     }
   } catch (error) {
     console.error(error);
+    throw error;
+  }
+}
+
+async function getDocFromWebsli({ housebill }) {
+  try {
+    const url = `${process.env.WEBSLI_GET_DOC_URL}/housebill=${housebill}/doctype=HOUSEBILL|doctype=LABEL`;
+    const queryType = await axios.get(url);
+    console.info('🚀 ~ file: index.js:327 ~ getDocFromWebsli ~ url:', url)
+    const { filename, b64str } = get(queryType, 'data.wtDocs.wtDoc[0]', {});
+    return { filename, b64str };
+  } catch (error) {
+    console.info('🙂 -> file: pod-doc-sender.js:207 -> getDocFromWebsli -> error:', error);
+    const message = get(error, 'response.data', '');
+    console.error('error while calling websli endpoint: ', message === '' ? error.message : message);
     throw error;
   }
 }
