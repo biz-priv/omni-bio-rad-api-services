@@ -310,12 +310,12 @@ async function sendToLbnAndUpdateInSourceDb(eventType, responses) {
       const businessDocumentReferences = [];
       const attachments = [];
 
-      documentResults.forEach((docs) => {
+      documentResults.map(async (docs) => {
         businessDocumentReferences.push({
           documentId: get(responses, 'housebill', ''),
           documentTypeCode: 'T51',
         });
-        docs.forEach((doc) => {
+        docs.map(async (doc) => {
           attachments.push({
             name: doc.filename,
             mimeCode: 'application/pdf',
@@ -348,14 +348,17 @@ async function getDocsFromWebsli({ housebill }) {
     const queryType = await axios.get(url);
     console.info('🚀 ~ file: index.js:327 ~ getDocsFromWebsli ~ url:', url);
     const docs = get(queryType, 'data.wtDocs.wtDoc', []);
-    return docs.map(doc => ({
+    return docs.map((doc) => ({
       filename: doc.filename,
-      b64str: doc.b64str
+      b64str: doc.b64str,
     }));
   } catch (error) {
     console.info('🙂 -> file: pod-doc-sender.js:207 -> getDocsFromWebsli -> error:', error);
     const message = get(error, 'response.data', '');
-    console.error('error while calling websli endpoint: ', message === '' ? error.message : message);
+    console.error(
+      'error while calling websli endpoint: ',
+      message === '' ? error.message : message
+    );
     throw error;
   }
 }
