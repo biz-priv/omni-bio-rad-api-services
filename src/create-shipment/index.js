@@ -331,6 +331,7 @@ async function sendToLbnAndUpdateInSourceDb(eventType, responses) {
         attachments,
       };
 
+      console.info('LbnPayload: ', payload)
       // dynamoData.LbnPayload = payload;
 
       console.info('lbn send Payload: ', JSON.stringify(payload));

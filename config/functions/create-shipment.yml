@@ -3,6 +3,7 @@ function:
   name: omni-bio-rad-create-shipment-${self:provider.stage}
   handler: src/create-shipment/index.handler
   runtime: nodejs20.x
+  memorySize: 2048
   timeout: 30
   layers:
     - { Ref: NodeModulesLambdaLayer }
