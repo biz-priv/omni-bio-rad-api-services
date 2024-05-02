@@ -302,6 +302,8 @@ async function sendToLbnAndUpdateInSourceDb(eventType, responses) {
       const token = await getLbnToken();
       const businessDocumentReferences = [];
 
+      const attachments = [];
+
       for (const response of responses) {
         const housebill = get(response, 'housebill', '');
         const { filename, b64str } = await getDocFromWebsli({ housebill });
@@ -309,13 +311,12 @@ async function sendToLbnAndUpdateInSourceDb(eventType, responses) {
         businessDocumentReferences.push({
           documentId: housebill,
           documentTypeCode: 'T51',
-          attachments: [
-            {
-              name: filename,
-              mimeCode: 'application/pdf',
-              fileContentBinaryObject: b64str
-            }
-          ]
+        });
+
+        attachments.push({
+          name: filename,
+          mimeCode: 'application/pdf',
+          fileContentBinaryObject: b64str
         });
       }
 
@@ -323,9 +324,10 @@ async function sendToLbnAndUpdateInSourceDb(eventType, responses) {
         carrierPartyLbnId: get(dynamoData, 'CarrierPartyLbnId', ''),
         confirmationStatus: 'CN',
         businessDocumentReferences,
+        attachments,
       };
 
-      dynamoData.LbnPayload = payload
+      dynamoData.LbnPayload = payload;
 
       console.info('lbn send Payload: ', JSON.stringify(payload));
       await sendToLbn(token, payload);
@@ -335,6 +337,7 @@ async function sendToLbnAndUpdateInSourceDb(eventType, responses) {
     throw error;
   }
 }
+
 
 async function getDocFromWebsli({ housebill }) {
   try {
