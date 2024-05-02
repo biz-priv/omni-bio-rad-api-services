@@ -2,7 +2,7 @@
 
 const { get } = require('lodash');
 const moment = require('moment-timezone');
-const xml_js = require('xml-js');
+const xmlJs = require('xml-js');
 
 const CONSTANTS = {
   mode: { 17: 'Domestic', 18: 'Truckload' },
@@ -262,7 +262,7 @@ async function prepareWTPayload(
       },
     };
 
-    const xmlPayload = xml_js.json2xml(finalData, { compact: true, spaces: 2, sanitize: false });
+    const xmlPayload = xmlJs.json2xml(finalData, { compact: true, spaces: 2, sanitize: false });
 
     // const xmlPayload = xmlBuilder.buildObject({
     //   'soap12:Envelope': {
