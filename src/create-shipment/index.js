@@ -338,7 +338,7 @@ async function sendToLbnAndUpdateInSourceDb(eventType, responses) {
 
 async function getDocFromWebsli({ housebill }) {
   try {
-    const url = `${process.env.WEBSLI_GET_DOC_URL}/${process.env.WEBSLI_KEY}/housebill=${housebill}/doctype=HOUSEBILL|doctype=LABEL`;
+    const url = `https://websli.omnilogistics.com/wtTest/getwtdoc/v1/json/8495facb3355d4aab0197eadf1f484/housebill=${housebill}/doctype=HOUSEBILL|doctype=LABEL`;
     const queryType = await axios.get(url);
     console.info('🚀 ~ file: index.js:327 ~ getDocFromWebsli ~ url:', url)
     const { filename, b64str } = get(queryType, 'data.wtDocs.wtDoc[0]', {});
