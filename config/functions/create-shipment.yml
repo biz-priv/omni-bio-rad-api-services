@@ -25,3 +25,6 @@ function:
     LBN_TOKEN_USERNAME: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/username}
     LBN_TOKEN_PASSWORD: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/password}
     LBN_TOKEN_AUTHORIZATION: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/authorization}
+    # WEBSLI_GET_DOC_URL: ${ssm:/omni-dw/${self:provider.stage}/websli/api/base.url}
+    # WEBSLI_KEY: ${ssm:/omni-dw/${self:provider.stage}/get-document/websli-key.default}
+
