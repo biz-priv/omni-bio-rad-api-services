@@ -54,6 +54,15 @@ async function prepareHeaderData(eventBody) {
     ShipmentType: 'Shipment',
     IncoTermsCode: get(eventBody, 'incoterm', ''),
   };
+  let specialInstructions = '';
+  await Promise.all(
+    get(eventBody, 'notes', []).map(async (note) => {
+      specialInstructions += get(note, 'text', '')
+        .replace(/\n/g, '&#10;')
+        .replace(/<br>/g, '&#10;');
+    })
+  );
+  headerData.SpecialInstructions = specialInstructions;
   if (get(CONSTANTS, `mode.${get(eventBody, 'shippingTypeCode', '')}`, '') !== '') {
     headerData.Mode = get(CONSTANTS, `mode.${get(eventBody, 'shippingTypeCode', '')}`, '');
   }
@@ -126,7 +135,7 @@ async function prepareReferenceList(loadingStage, unloadingStage, eventBody) {
 async function prepareShipmentLineListDate(items) {
   const shipmentList = await Promise.all(
     items.map(async (item) => {
-      let hazmatValue = 0;
+      let hazmatValue;
       if (get(item, 'dangerousGoods', '') === false) {
         hazmatValue = 0;
       } else {
