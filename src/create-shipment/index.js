@@ -197,14 +197,14 @@ module.exports.handler = async (event, context) => {
     dynamoData.Housebill = apiResponses.map((obj) => obj.fileNumber);
 
     // send back the created shipment to LBN(which is customers endpoint) and update couple of fields in source Db.
-    const eventArray = ['sendToLbn', 'updateDb'];
-    await Promise.all(
-      eventArray.map(async (eventType) => {
-        await sendToLbnAndUpdateInSourceDb(eventType, apiResponses);
-      })
-    );
+    // const eventArray = ['sendToLbn', 'updateDb'];
+    // await Promise.all(
+    //   eventArray.map(async (eventType) => {
+    //     await sendToLbnAndUpdateInSourceDb(eventType, apiResponses);
+    //   })
+    // );
 
-    dynamoData.Status = 'SUCCESS';
+    dynamoData.Status = 'PENDING';
     await putLogItem(dynamoData);
     return {
       statusCode: 200,
@@ -331,7 +331,7 @@ async function sendToLbnAndUpdateInSourceDb(eventType, responses) {
         attachments,
       };
 
-      console.info('LbnPayload: ', payload)
+      console.info('LbnPayload: ', payload);
       // dynamoData.LbnPayload = payload;
 
       console.info('lbn send Payload: ', JSON.stringify(payload));
