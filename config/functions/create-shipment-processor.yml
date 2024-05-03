@@ -13,14 +13,13 @@ function:
       - src/Shared/**
   events:
     - stream:
-        arn: ${ssm:/omni/${self:provider.stage}/bio-rad/ddb.tableName}
+        arn: ${ssm:/omni/${self:provider.stage}/bio-rad/ddb.streamArn}
         batchSize: 3
         maximumRetryAttempts: 2
         bisectBatchOnFunctionError: true
         filterPatterns:
           - { dynamodb: { NewImage: { Process: { S: ['CREATE'] }, Status: { S: ['PENDING'] } } } }
   environment:
-    WT_URL: ${ssm:/omni-dw/${self:provider.stage}/createShipment/wt/url}
     UPDATE_SOURCE_DB_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/update-source-db-endpoint}
     UPDATE_SOURCE_DB_API_KEY: ${ssm:/omni/${self:provider.stage}/bio-rad/api-key}
     LBN_SEND_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-send-endpoint}
