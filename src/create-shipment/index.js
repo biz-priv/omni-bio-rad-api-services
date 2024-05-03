@@ -194,7 +194,7 @@ module.exports.handler = async (event, context) => {
     console.info(apiResponses);
     dynamoData.ShipmentData = apiResponses;
     dynamoData.FileNumber = apiResponses.map((obj) => obj.fileNumber);
-    dynamoData.Housebill = apiResponses.map((obj) => obj.fileNumber);
+    dynamoData.Housebill = apiResponses.map((obj) => obj.housebill);
 
     // send back the created shipment to LBN(which is customers endpoint) and update couple of fields in source Db.
     // const eventArray = ['sendToLbn', 'updateDb'];

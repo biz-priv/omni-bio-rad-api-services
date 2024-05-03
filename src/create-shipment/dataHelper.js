@@ -215,17 +215,6 @@ async function prepareWTPayload(
   serviceLevel
 ) {
   try {
-    // const finalData = {
-    //   ...headerData,
-    //   ...shipperAndConsignee,
-    //   ...referenceList,
-    //   ...shipmentLineList,
-    //   ...dateValues,
-    //   ServiceLevel: serviceLevel,
-    // };
-
-    // console.info('finalData: ', finalData)
-
     const finalData = {
       '_declaration': {
         _attributes: {
@@ -273,32 +262,6 @@ async function prepareWTPayload(
 
     const xmlPayload = xmlJs.json2xml(finalData, { compact: true, spaces: 2, sanitize: false });
 
-    // const xmlPayload = xmlBuilder.buildObject({
-    //   'soap12:Envelope': {
-    //     '$': {
-    //       'xmlns:xsi': 'http://www.w3.org/2001/XMLSchema-instance',
-    //       'xmlns:xsd': 'http://www.w3.org/2001/XMLSchema',
-    //       'xmlns:soap12': 'http://schemas.xmlsoap.org/soap/envelope/',
-    //     },
-    //     'soap12:Header': {
-    //       AuthHeader: {
-    //         $: {
-    //           xmlns: 'http://tempuri.org/',
-    //         },
-    //         UserName: 'saplbn',
-    //         Password: 'saplbn',
-    //       },
-    //     },
-    //     'soap12:Body': {
-    //       AddNewShipmentV3: {
-    //         $: {
-    //           xmlns: 'http://tempuri.org/',
-    //         },
-    //         oShipData: finalData,
-    //       },
-    //     },
-    //   },
-    // });
     return { xmlPayload, jsonPayload: finalData };
   } catch (error) {
     console.error('Error while preparing payload ', error);
