@@ -75,12 +75,13 @@ package:
 functions:
   #  lambda's responsible for inserting values from streams to shipment-header table
   create-shipment: ${file(config/functions/create-shipment.yml):function}
+  create-shipment-processor: ${file(config/functions/create-shipment-processor.yml):function}
   update-shipment: ${file(config/functions/update-shipment.yml):function}
+  update-shipment-processor: ${file(config/functions/update-shipment-processor.yml):function}
   cancel-shipment: ${file(config/functions/cancel-shipment.yml):function}
   update-source-db: ${file(config/functions/update-source-db.yml):function}
   add-tracking: ${file(config/functions/add-tracking.yml):function}
   delete-add-tracking: ${file(config/functions/delete-add-tracking.yml):function}
-  update-shipment-processor: ${file(config/functions/update-shipment-processor.yml):function}
 
 layers:
   NodeModules:
