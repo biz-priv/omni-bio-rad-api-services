@@ -30,7 +30,7 @@ module.exports.handler = async (event, context) => {
     dynamoData.OrderingPartyLbnId = get(eventBody, 'shipper.shipperLBNID', '');
     dynamoData.CarrierPartyLbnId = get(eventBody, 'carrier.carrierLBNID', '');
     dynamoData.TechnicalId = get(eventBody, 'technicalId', '');
-    dynamoData.housebill = [];
+    dynamoData.Housebill = [];
 
     const stops = get(eventBody, 'shipment.stops', '');
 

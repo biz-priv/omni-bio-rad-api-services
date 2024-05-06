@@ -3,7 +3,7 @@ function:
   name: omni-bio-rad-update-shipment-processor-${self:provider.stage}
   handler: src/update-shipment-processor/index.handler
   runtime: nodejs20.x
-  timeout: 30
+  timeout: 900
   layers:
     - { Ref: NodeModulesLambdaLayer }
   package:
@@ -12,7 +12,19 @@ function:
       - src/update-shipment-processor/**
       - src/Shared/**
   events:
-    - http:
-        path: /LbnFreightOrderForSubcontracting/{orderingPartyLbnId}/{originatorId}/{freightOrderId}
-        method: PUT
-        private: true
+    - stream:
+        arn: ${ssm:/omni/${self:provider.stage}/bio-rad/ddb.streamArn}
+        batchSize: 2
+        maximumRetryAttempts: 2
+        bisectBatchOnFunctionError: true
+        filterPatterns:
+          - { dynamodb: { NewImage: { Process: { S: ['UPDATE'] }, Status: { S: ['PENDING'] } } } }
+  environment:
+    WT_URL: ${ssm:/omni-dw/${self:provider.stage}/createShipment/wt/url}
+    UPDATE_SOURCE_DB_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/update-source-db-endpoint}
+    UPDATE_SOURCE_DB_API_KEY: ${ssm:/omni/${self:provider.stage}/bio-rad/api-key}
+    LBN_SEND_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-send-endpoint}
+    LBN_TOKEN_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint}
+    LBN_TOKEN_USERNAME: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/username}
+    LBN_TOKEN_PASSWORD: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/password}
+    LBN_TOKEN_AUTHORIZATION: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/authorization}

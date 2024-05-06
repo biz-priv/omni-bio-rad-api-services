@@ -7,19 +7,18 @@ const moment = require('moment-timezone');
 const { putLogItem, getData } = require('../Shared/dynamo');
 const {
   prepareHeaderData,
-  groupItems,
-  getServiceLevel,
-  CONSTANTS,
   prepareShipperAndConsigneeData,
   prepareReferenceList,
   prepareShipmentLineListDate,
   prepareDateValues,
   prepareWTPayload,
-} = require('../create-shipment/dataHelper');
+  groupItems,
+  getServiceLevel,
+  CONSTANTS,
+} = require('../Shared/dataHelper');
 
 const sns = new AWS.SNS();
 const dynamoData = {};
-let dynamoDataFlag;
 
 module.exports.handler = async (event, context) => {
   console.info(event);
@@ -29,40 +28,43 @@ module.exports.handler = async (event, context) => {
 
     const eventBody = get(event, 'body', {});
 
-    const Params = {
-      TableName: process.env.LOGS_TABLE,
-      IndexName: 'FreightOrderId-Index',
-      KeyConditionExpression: 'FreightOrderId = :FreightOrderId',
-      ExpressionAttributeValues: {
-        ':FreightOrderId': '6100001369',
-      },
-    };
+    let initialRecord;
+    if (get(event, 'pathParameters.freightOrderId', '') !== '') {
+      const Params = {
+        TableName: process.env.LOGS_TABLE,
+        IndexName: 'FreightOrderId-Index',
+        KeyConditionExpression: 'FreightOrderId = :FreightOrderId',
+        ExpressionAttributeValues: {
+          ':FreightOrderId': get(event, 'pathParameters.freightOrderId', ''),
+        },
+      };
 
-    const referenceResult = await getData(Params);
-    const initialRecord = referenceResult.filter(
-      (obj) => obj.Process === 'CREATE' && obj.Status === 'SUCCESS'
-    );
-    console.info(initialRecord);
-    if (initialRecord.length > 1) {
-      dynamoDataFlag = true;
+      const Result = await getData(Params);
+      initialRecord = Result.filter((obj) => obj.Process === 'CREATE' && obj.Status === 'SUCCESS');
+      console.info(initialRecord);
     } else {
-      dynamoDataFlag = false;
-      const cstDate = moment().tz('America/Chicago');
-      dynamoData.CSTDate = cstDate.format('YYYY-MM-DD');
-      dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
-      dynamoData.Event = get(event, 'body', '');
-      dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
-      dynamoData.Process = 'UPDATE';
-      dynamoData.FreightOrderId = get(event, 'pathParameters.freightOrderId', '');
-      dynamoData.OrderingPartyLbnId = get(event, 'pathParameters.orderingPartyLbnId', '');
-      dynamoData.OriginatorId = get(event, 'pathParameters.originatorId', '');
-      dynamoData.CarrierPartyLbnId = get(eventBody, 'carrierPartyLbnId', '');
-      dynamoData.CallInPhone = `${get(eventBody, 'orderingParty.address.phoneNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.phoneNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.phoneNumber.subscriberId', '')}`;
-      dynamoData.CallInFax = `${get(eventBody, 'orderingParty.address.faxNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.faxNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.faxNumber.subscriberId', '')}`;
-      dynamoData.QuoteContactEmail = get(eventBody, 'orderingParty.address.emailAddress', '');
-      dynamoData.XmlPayload = {};
+      throw new Error(
+        'Error, FreightOrderId is missing in the request, please add the details in the request.'
+      );
     }
-    console.info(dynamoDataFlag);
+    const cstDate = moment().tz('America/Chicago');
+    dynamoData.CSTDate = cstDate.format('YYYY-MM-DD');
+    dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
+    dynamoData.Event = get(event, 'body', '');
+    dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
+    dynamoData.Process = 'UPDATE';
+    dynamoData.FreightOrderId = get(event, 'pathParameters.freightOrderId', '');
+    dynamoData.OrderingPartyLbnId = get(event, 'pathParameters.orderingPartyLbnId', '');
+    dynamoData.OriginatorId = get(event, 'pathParameters.originatorId', '');
+    dynamoData.CarrierPartyLbnId = get(eventBody, 'carrierPartyLbnId', '');
+    dynamoData.CallInPhone = `${get(eventBody, 'orderingParty.address.phoneNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.phoneNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.phoneNumber.subscriberId', '')}`;
+    dynamoData.CallInFax = `${get(eventBody, 'orderingParty.address.faxNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.faxNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.faxNumber.subscriberId', '')}`;
+    dynamoData.QuoteContactEmail = get(eventBody, 'orderingParty.address.emailAddress', '');
+    if (initialRecord.length < 1) {
+      throw new Error(
+        `Error, There are no shipments for the given freight order Id: ${get(dynamoData, 'FreightOrderId')}, please create a shipment before updating.`
+      );
+    }
 
     if (
       get(dynamoData, 'FreightOrderId', '') === '' ||
@@ -128,7 +130,7 @@ module.exports.handler = async (event, context) => {
           }
         } else {
           throw new Error(
-            `Cannot get the total duration from the connecting stages, please provide the total duration for this shipment from ${get(loadingStage, 'loadingLocation.id', '')} to ${get(unloadingStage, 'unloadingLocation.id', '')}`
+            `Error, Cannot get the total duration from the connecting stages, please provide the total duration for this shipment from ${get(loadingStage, 'loadingLocation.id', '')} to ${get(unloadingStage, 'unloadingLocation.id', '')}`
           );
         }
         const shipperAndConsignee = await prepareShipperAndConsigneeData(
@@ -163,20 +165,21 @@ module.exports.handler = async (event, context) => {
       })
     );
     console.info('wtPayloadsData: ', wtPayloadsData);
-    console.info('results: ', initialRecord[0].XmlPayload);
+    console.info('results: ', get(initialRecord,'[0].ShipmentDetails', ''));
     const updateResponses = [];
     await Promise.all(
       wtPayloadsData.map(async (data) => {
-        console.info(data.stopId);
-        const initialPayload = initialRecord[0].XmlPayload[data.stopId];
-        const updateFlag = compareJson(initialPayload.jsonPayload, data.jsonPayload);
-        console.info(JSON.stringify(data.jsonPayload));
+        console.info(get(data, 'stopId', ''));
+        const initialPayload = get(initialRecord, '[0].ShipmentDetails[data.stopId]', '');
+        const updateFlag = compareJson(get(initialPayload, 'jsonPayload', ''), get(data, 'jsonPayload', ''));
+        console.info(JSON.stringify(get(data, 'jsonPayload', '')));
         console.info(updateFlag);
         if (!updateFlag) {
           updateResponses.push({
-            initialPayload,
-            updatedPayload: data.jsonPayload,
-            status: 'PENDING',
+            initialXmlPayload: get(initialPayload, 'xmlPayload', ''),
+            updatedJsonPayload: get(data, 'jsonPayload', ''),
+            updateXmlPayload: get(data, 'xmlPayload', ''),
+            stopId: get(data, 'stopId', ''),
           });
         }
       })
@@ -195,6 +198,7 @@ module.exports.handler = async (event, context) => {
       statusCode: 200,
       body: JSON.stringify(
         {
+          responseId: dynamoData.Id,
           Message: 'Success',
         },
         null,
@@ -228,7 +232,7 @@ module.exports.handler = async (event, context) => {
     }
     dynamoData.ErrorMsg = errorMsgVal;
     dynamoData.Status = 'FAILED';
-    // await putLogItem(dynamoData);
+    await putLogItem(dynamoData);
     return {
       statusCode: 400,
       body: JSON.stringify(

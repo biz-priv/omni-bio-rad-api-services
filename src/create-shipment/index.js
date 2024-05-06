@@ -2,12 +2,12 @@
 
 const { get } = require('lodash');
 const AWS = require('aws-sdk');
-const axios = require('axios');
 const uuid = require('uuid');
 const moment = require('moment-timezone');
-const { putLogItem } = require('../Shared/dynamo');
-const { xmlJsonConverter } = require('../Shared/dataHelper');
+const { putLogItem, getData } = require('../Shared/dynamo');
 const {
+  xmlJsonConverter,
+  sendToWT,
   prepareHeaderData,
   prepareShipperAndConsigneeData,
   prepareReferenceList,
@@ -17,7 +17,7 @@ const {
   groupItems,
   getServiceLevel,
   CONSTANTS,
-} = require('./dataHelper');
+} = require('../Shared/dataHelper');
 
 const sns = new AWS.SNS();
 const dynamoData = {};
@@ -44,7 +44,7 @@ module.exports.handler = async (event, context) => {
     dynamoData.CallInPhone = `${get(eventBody, 'orderingParty.address.phoneNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.phoneNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.phoneNumber.subscriberId', '')}`;
     dynamoData.CallInFax = `${get(eventBody, 'orderingParty.address.faxNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.faxNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.faxNumber.subscriberId', '')}`;
     dynamoData.QuoteContactEmail = get(eventBody, 'orderingParty.address.emailAddress', '');
-    dynamoData.XmlPayload = {};
+    dynamoData.ShipmentDetails = {};
 
     if (
       get(dynamoData, 'FreightOrderId', '') === '' ||
@@ -54,6 +54,24 @@ module.exports.handler = async (event, context) => {
       throw new Error(
         'Error, FreightOrderId or OrderingPartyLbnId or CarrierPartyLbnId is missing in the request, please add the details in the request.'
       );
+    }else{
+      const Params = {
+        TableName: process.env.LOGS_TABLE,
+        IndexName: 'FreightOrderId-Index',
+        KeyConditionExpression: 'FreightOrderId = :FreightOrderId',
+        ExpressionAttributeValues: {
+          ':FreightOrderId': get(event, 'pathParameters.freightOrderId', ''),
+        },
+      };
+
+      const Result = await getData(Params);
+      const data = Result.filter((obj) => obj.Process === 'CREATE' && obj.Status === 'SUCCESS');
+      console.info(data);
+      if(data.length > 0){
+        throw new Error(
+          `Error, Shipments already created for the provided freight order Id: ${get(dynamoData, 'FreightOrderId', '')}`
+        );
+      }
     }
     console.info(dynamoData.CSTDateTime);
 
@@ -109,7 +127,7 @@ module.exports.handler = async (event, context) => {
           }
         } else {
           throw new Error(
-            `Cannot get the total duration from the connecting stages, please provide the total duration for this shipment from ${get(loadingStage, 'loadingLocation.id', '')} to ${get(unloadingStage, 'unloadingLocation.id', '')}`
+            `Error, Cannot get the total duration from the connecting stages, please provide the total duration for this shipment from ${get(loadingStage, 'loadingLocation.id', '')} to ${get(unloadingStage, 'unloadingLocation.id', '')}`
           );
         }
         const shipperAndConsignee = await prepareShipperAndConsigneeData(
@@ -149,7 +167,7 @@ module.exports.handler = async (event, context) => {
 
     // Send the payloads to world trak for shipment creation one by one as it doesn't allow conurrent executions.
     for (const data of wtPayloadsData) {
-      const xmlResponse = await sendToWT(get(data, 'xmlPayload'));
+      const xmlResponse = await sendToWT(get(data, 'xmlPayload', ''));
 
       const xmlObjResponse = await xmlJsonConverter(xmlResponse);
 
@@ -185,24 +203,16 @@ module.exports.handler = async (event, context) => {
         ''
       );
 
-      dynamoData.XmlPayload[get(data, 'stopId')] = data;
-      dynamoData.XmlPayload[get(data, 'stopId')].housebill = housebill;
-      dynamoData.XmlPayload[get(data, 'stopId')].fileNumber = fileNumber;
-      dynamoData.XmlPayload[get(data, 'stopId')].XmlResponse = xmlResponse;
+      dynamoData.ShipmentDetails[get(data, 'stopId')] = data;
+      dynamoData.ShipmentDetails[get(data, 'stopId')].housebill = housebill;
+      dynamoData.ShipmentDetails[get(data, 'stopId')].fileNumber = fileNumber;
+      dynamoData.ShipmentDetails[get(data, 'stopId')].XmlResponse = xmlResponse;
       apiResponses.push({ housebill, fileNumber });
     }
     console.info(apiResponses);
     dynamoData.ShipmentData = apiResponses;
     dynamoData.FileNumber = apiResponses.map((obj) => obj.fileNumber);
     dynamoData.Housebill = apiResponses.map((obj) => obj.housebill);
-
-    // send back the created shipment to LBN(which is customers endpoint) and update couple of fields in source Db.
-    // const eventArray = ['sendToLbn', 'updateDb'];
-    // await Promise.all(
-    //   eventArray.map(async (eventType) => {
-    //     await sendToLbnAndUpdateInSourceDb(eventType, apiResponses);
-    //   })
-    // );
 
     dynamoData.Status = 'PENDING';
     await putLogItem(dynamoData);
@@ -259,26 +269,3 @@ module.exports.handler = async (event, context) => {
   }
 };
 
-async function sendToWT(postData) {
-  try {
-    const config = {
-      url: process.env.WT_URL,
-      method: 'post',
-      headers: {
-        'Content-Type': 'text/xml',
-        'soapAction': 'http://tempuri.org/AddNewShipmentV3',
-      },
-      data: postData,
-    };
-
-    console.info('config: ', config);
-    const res = await axios.request(config);
-    if (get(res, 'status', '') === 200) {
-      return get(res, 'data', '');
-    }
-    throw new Error(`WORLD TRAK API Request Failed: ${res}`);
-  } catch (error) {
-    console.error('WORLD TRAK API Request Failed: ', error);
-    throw new Error(`WORLD TRAK API Request Failed: ${error}`);
-  }
-}

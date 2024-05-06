@@ -2,8 +2,7 @@
 
 const AWS = require('aws-sdk');
 const { get } = require('lodash');
-const { querySourceDb } = require('../Shared/dataHelper');
-const axios = require('axios');
+const { querySourceDb, getLbnToken, sendToLbn, getDocsFromWebsli } = require('../Shared/dataHelper');
 const { putLogItem } = require('../Shared/dynamo');
 
 const sns = new AWS.SNS();
@@ -69,7 +68,7 @@ module.exports.handler = async (event, context) => {
         // // dynamoData.LbnPayload = payload;
 
         const token = await getLbnToken();
-        await sendToLbn(token, payload);
+        await sendToLbn(token, payload, dynamoData);
       })
     );
 
@@ -126,73 +125,3 @@ module.exports.handler = async (event, context) => {
     };
   }
 };
-
-async function getLbnToken() {
-  try {
-    const config = {
-      maxBodyLength: Infinity,
-      url: process.env.LBN_TOKEN_URL,
-      method: 'post',
-      headers: {
-        Username: process.env.LBN_TOKEN_USERNAME,
-        Password: process.env.LBN_TOKEN_PASSWORD,
-        Authorization: process.env.LBN_TOKEN_AUTHORIZATION,
-      },
-    };
-
-    console.info('config: ', config);
-    const res = await axios.request(config);
-    if (get(res, 'status', '') === 200) {
-      return get(res, 'data.access_token', '');
-    }
-    throw new Error(`Lbn token API Request Failed: ${res}`);
-  } catch (error) {
-    console.error('Lbn token API Request Failed: ', error);
-    throw new Error(`Lbn token API Request Failed: ${error}`);
-  }
-}
-
-async function getDocsFromWebsli({ housebill }) {
-  try {
-    const url = `https://websli.omnilogistics.com/wtTest/getwtdoc/v1/json/9980f7b9eaffb71ce2f86734dae062/housebill=${housebill}/doctype=HOUSEBILL|doctype=LABEL`;
-    const queryType = await axios.get(url);
-    //   console.info('🚀 ~ file: index.js:327 ~ getDocsFromWebsli ~ url:', url);
-    const docs = get(queryType, 'data.wtDocs.wtDoc', []);
-    return docs.map((doc) => ({
-      filename: doc.filename,
-      b64str: doc.b64str,
-    }));
-  } catch (error) {
-    //   console.info('🙂 -> file: pod-doc-sender.js:207 -> getDocsFromWebsli -> error:', error);
-    const message = get(error, 'response.data', '');
-    console.error(
-      'error while calling websli endpoint: ',
-      message === '' ? error.message : message
-    );
-    throw error;
-  }
-}
-
-async function sendToLbn(token, payload) {
-  try {
-    const config = {
-      url: `${process.env.LBN_SEND_URL}/${get(dynamoData, 'OrderingPartyLbnId')}/${get(dynamoData, 'OriginatorId')}/${get(dynamoData, 'FreightOrderId')}/carrierResponse`,
-      method: 'post',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      data: payload,
-    };
-
-    console.info('config: ', config);
-    const res = await axios.request(config);
-    if (get(res, 'status', '') === 200) {
-      return get(res, 'data', '');
-    }
-    throw new Error(`Lbn main API Request Failed: ${res}`);
-  } catch (error) {
-    console.error('Lbn main API Request Failed: ', error);
-    throw new Error(`Lbn main API Request Failed: ${error}`);
-  }
-}

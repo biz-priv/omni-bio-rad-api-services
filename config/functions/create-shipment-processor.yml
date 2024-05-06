@@ -3,7 +3,7 @@ function:
   name: omni-bio-rad-create-shipment-processor-${self:provider.stage}
   handler: src/create-shipment-processor/index.handler
   runtime: nodejs20.x
-  timeout: 30
+  timeout: 900
   layers:
     - { Ref: NodeModulesLambdaLayer }
   package:
