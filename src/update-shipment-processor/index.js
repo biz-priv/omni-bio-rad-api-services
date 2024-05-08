@@ -29,7 +29,7 @@ module.exports.handler = async (event, context) => {
       records.map(async (record) => {
         console.info(record);
         dynamoData = AWS.DynamoDB.Converter.unmarshall(get(record, 'dynamodb.NewImage'));
-
+        dynamoData.ShipmentDetails = {}
         const Params = {
           TableName: process.env.LOGS_TABLE,
           IndexName: 'FreightOrderId-Index',
@@ -48,10 +48,8 @@ module.exports.handler = async (event, context) => {
         const shipmentUpdates = get(dynamoData, 'ShipmentUpdates', []);
         for (const data of shipmentUpdates) {
           console.info(data);
-          CreateDynamoData.ShipmentDetails = [];
-          CreateDynamoData.ShipmentData = [];
           if (get(data, 'updateFlag', false) === false) {
-            CreateDynamoData.ShipmentDetails[get(data, 'stopId')] = data;
+            dynamoData.ShipmentDetails[get(data, 'stopId')] = data;
             console.info('Skip the shipment as there is no update in the payload.', data);
             continue;
           }
@@ -100,15 +98,13 @@ module.exports.handler = async (event, context) => {
             ''
           );
 
-          CreateDynamoData.ShipmentDetails[get(data, 'stopId')] = data;
-          CreateDynamoData.ShipmentDetails[get(data, 'stopId')].housebill = housebill;
-          CreateDynamoData.ShipmentDetails[get(data, 'stopId')].fileNumber = fileNumber;
-          CreateDynamoData.ShipmentDetails[get(data, 'stopId')].xmlResponse = xmlResponse;
+          dynamoData.ShipmentDetails[get(data, 'stopId')] = data;
+          dynamoData.ShipmentDetails[get(data, 'stopId')].housebill = housebill;
+          dynamoData.ShipmentDetails[get(data, 'stopId')].fileNumber = fileNumber;
+          dynamoData.ShipmentDetails[get(data, 'stopId')].xmlResponse = xmlResponse;
           dynamoData.Housebill.push(housebill);
           dynamoData.FileNumber.push(fileNumber);
         }
-        CreateDynamoData.Housebill = get(dynamoData, 'Housebill', []);
-        CreateDynamoData.FileNumber = get(dynamoData, 'FileNumber', []);
 
         const fileNumberArray = get(dynamoData, 'FileNumber');
         console.info('fileNumberArray: ', fileNumberArray);
@@ -167,7 +163,6 @@ module.exports.handler = async (event, context) => {
 
         dynamoData.Status = 'SUCCESS';
         console.info(dynamoData);
-        console.info(CreateDynamoData);
         console.info('SUCCESS');
         await putLogItem(dynamoData);
         await putLogItem(CreateDynamoData);
