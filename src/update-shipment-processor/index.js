@@ -3,7 +3,15 @@
 const AWS = require('aws-sdk');
 const { get } = require('lodash');
 const { putLogItem, getData } = require('../Shared/dynamo');
-const { xmlJsonConverter, sendToWT, getLbnToken, sendToLbn, querySourceDb, getDocsFromWebsli } = require('../Shared/dataHelper');
+const {
+  xmlJsonConverter,
+  sendToWT,
+  getLbnToken,
+  sendToLbn,
+  querySourceDb,
+  getDocsFromWebsli,
+  cancelShipmentApiCall,
+} = require('../Shared/dataHelper');
 const moment = require('moment-timezone');
 
 const cstDate = moment().tz('America/Chicago');
@@ -21,8 +29,6 @@ module.exports.handler = async (event, context) => {
       records.map(async (record) => {
         console.info(record);
         dynamoData = AWS.DynamoDB.Converter.unmarshall(get(record, 'dynamodb.NewImage'));
-        dynamoData.Housebill = []
-        dynamoData.FileNumber = []
 
         const Params = {
           TableName: process.env.LOGS_TABLE,
@@ -41,7 +47,24 @@ module.exports.handler = async (event, context) => {
 
         const shipmentUpdates = get(dynamoData, 'ShipmentUpdates', []);
         for (const data of shipmentUpdates) {
-          const xmlResponse = await sendToWT(get(data, 'updateXmlPayload', ''));
+          console.info(data);
+          CreateDynamoData.ShipmentDetails = [];
+          CreateDynamoData.ShipmentData = [];
+          if (get(data, 'updateFlag', false) === false) {
+            CreateDynamoData.ShipmentDetails[get(data, 'stopId')] = data;
+            console.info('Skip the shipment as there is no update in the payload.', data);
+            continue;
+          }
+
+          if (get(data, 'intialHousebill', '') !== '') {
+            console.info(
+              'This is an update for existing shipment, so cancelling the old shipment.'
+            );
+            console.info(get(data, 'intialHousebill', ''));
+            await cancelShipmentApiCall(get(data, 'intialHousebill', ''));
+          }
+
+          const xmlResponse = await sendToWT(get(data, 'xmlPayload', ''));
 
           const xmlObjResponse = await xmlJsonConverter(xmlResponse);
 
@@ -80,10 +103,12 @@ module.exports.handler = async (event, context) => {
           CreateDynamoData.ShipmentDetails[get(data, 'stopId')] = data;
           CreateDynamoData.ShipmentDetails[get(data, 'stopId')].housebill = housebill;
           CreateDynamoData.ShipmentDetails[get(data, 'stopId')].fileNumber = fileNumber;
-          CreateDynamoData.ShipmentDetails[get(data, 'stopId')].XmlResponse = xmlResponse;
-          dynamoData.Housebill.push(housebill)
-          dynamoData.FileNumber.push(fileNumber)
+          CreateDynamoData.ShipmentDetails[get(data, 'stopId')].xmlResponse = xmlResponse;
+          dynamoData.Housebill.push(housebill);
+          dynamoData.FileNumber.push(fileNumber);
         }
+        CreateDynamoData.Housebill = get(dynamoData, 'Housebill', []);
+        CreateDynamoData.FileNumber = get(dynamoData, 'FileNumber', []);
 
         const fileNumberArray = get(dynamoData, 'FileNumber');
         console.info('fileNumberArray: ', fileNumberArray);
@@ -129,16 +154,21 @@ module.exports.handler = async (event, context) => {
         };
 
         console.info('LbnPayload: ', payload);
-        // // dynamoData.LbnPayload = payload;
 
         const token = await getLbnToken();
         await sendToLbn(token, payload, dynamoData);
 
         CreateDynamoData.LastUpdated = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
-        CreateDynamoData.LastUpdateEvent = dynamoData.Id;
+        CreateDynamoData.LastUpdateEvent.push({
+          id: get(dynamoData, 'Id', ''),
+          time: cstDate.format('YYYY-MM-DD HH:mm:ss SSS'),
+        });
         dynamoData.LastUpdated = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
 
         dynamoData.Status = 'SUCCESS';
+        console.info(dynamoData);
+        console.info(CreateDynamoData);
+        console.info('SUCCESS');
         await putLogItem(dynamoData);
         await putLogItem(CreateDynamoData);
       })
@@ -181,6 +211,8 @@ module.exports.handler = async (event, context) => {
     }
     dynamoData.ErrorMsg = errorMsgVal;
     dynamoData.Status = 'FAILED';
+    console.info(dynamoData);
+    console.info('FAILED');
     await putLogItem(dynamoData);
     return {
       statusCode: 400,

@@ -30,6 +30,12 @@ module.exports.handler = async (event, context) => {
 
     // const eventBody = get(event, 'body', {});
 
+    const attachments = get(eventBody, 'attachments', []);
+    if (attachments.length > 0) {
+      delete eventBody.attachments;
+    }
+    console.info('attachements: ', attachments);
+
     // Set the time zone to CST
     const cstDate = moment().tz('America/Chicago');
     dynamoData.CSTDate = cstDate.format('YYYY-MM-DD');
@@ -45,6 +51,9 @@ module.exports.handler = async (event, context) => {
     dynamoData.CallInFax = `${get(eventBody, 'orderingParty.address.faxNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.faxNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.faxNumber.subscriberId', '')}`;
     dynamoData.QuoteContactEmail = get(eventBody, 'orderingParty.address.emailAddress', '');
     dynamoData.ShipmentDetails = {};
+    dynamoData.FileNumber = [];
+    dynamoData.Housebill = [];
+    dynamoData.LastUpdateEvent = [];
 
     if (
       get(dynamoData, 'FreightOrderId', '') === '' ||
@@ -54,20 +63,20 @@ module.exports.handler = async (event, context) => {
       throw new Error(
         'Error, FreightOrderId or OrderingPartyLbnId or CarrierPartyLbnId is missing in the request, please add the details in the request.'
       );
-    }else{
+    } else {
       const Params = {
         TableName: process.env.LOGS_TABLE,
         IndexName: 'FreightOrderId-Index',
         KeyConditionExpression: 'FreightOrderId = :FreightOrderId',
         ExpressionAttributeValues: {
-          ':FreightOrderId': get(event, 'pathParameters.freightOrderId', ''),
+          ':FreightOrderId': get(dynamoData, 'FreightOrderId', ''),
         },
       };
 
       const Result = await getData(Params);
       const data = Result.filter((obj) => obj.Process === 'CREATE' && obj.Status === 'SUCCESS');
       console.info(data);
-      if(data.length > 0){
+      if (data.length > 0) {
         throw new Error(
           `Error, Shipments already created for the provided freight order Id: ${get(dynamoData, 'FreightOrderId', '')}`
         );
@@ -158,12 +167,10 @@ module.exports.handler = async (event, context) => {
           serviceLevel
         );
         console.info(payloads);
-        dynamoData[key] = payloads;
         return { ...payloads, stopId: key };
       })
     );
     console.info(wtPayloadsData);
-    const apiResponses = [];
 
     // Send the payloads to world trak for shipment creation one by one as it doesn't allow conurrent executions.
     for (const data of wtPayloadsData) {
@@ -207,12 +214,16 @@ module.exports.handler = async (event, context) => {
       dynamoData.ShipmentDetails[get(data, 'stopId')].housebill = housebill;
       dynamoData.ShipmentDetails[get(data, 'stopId')].fileNumber = fileNumber;
       dynamoData.ShipmentDetails[get(data, 'stopId')].XmlResponse = xmlResponse;
-      apiResponses.push({ housebill, fileNumber });
+      dynamoData.FileNumber.push(fileNumber);
+      dynamoData.Housebill.push(housebill);
     }
-    console.info(apiResponses);
-    dynamoData.ShipmentData = apiResponses;
-    dynamoData.FileNumber = apiResponses.map((obj) => obj.fileNumber);
-    dynamoData.Housebill = apiResponses.map((obj) => obj.housebill);
+
+    // const filteredAttachments = await attachments.filter(obj => obj.typeCode)
+    // for(const attachment of filteredAttachments){
+    //   for(const housebill of get(dynamoData, 'Housebill', [])){
+
+    //   }
+    // }
 
     dynamoData.Status = 'PENDING';
     await putLogItem(dynamoData);
@@ -268,4 +279,3 @@ module.exports.handler = async (event, context) => {
     };
   }
 };
-

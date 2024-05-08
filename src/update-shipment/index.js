@@ -1,6 +1,6 @@
 'use strict';
 
-const { get } = require('lodash');
+const { get, isEqual } = require('lodash');
 const AWS = require('aws-sdk');
 const uuid = require('uuid');
 const moment = require('moment-timezone');
@@ -24,9 +24,9 @@ module.exports.handler = async (event, context) => {
   console.info(event);
 
   try {
-    // const eventBody = JSON.parse(get(event, 'body', {}));
+    const eventBody = JSON.parse(get(event, 'body', {}));
 
-    const eventBody = get(event, 'body', {});
+    // const eventBody = get(event, 'body', {});
 
     let initialRecord;
     if (get(event, 'pathParameters.freightOrderId', '') !== '') {
@@ -60,6 +60,8 @@ module.exports.handler = async (event, context) => {
     dynamoData.CallInPhone = `${get(eventBody, 'orderingParty.address.phoneNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.phoneNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.phoneNumber.subscriberId', '')}`;
     dynamoData.CallInFax = `${get(eventBody, 'orderingParty.address.faxNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.faxNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.faxNumber.subscriberId', '')}`;
     dynamoData.QuoteContactEmail = get(eventBody, 'orderingParty.address.emailAddress', '');
+    dynamoData.Housebill = [];
+    dynamoData.FileNumber = [];
     if (initialRecord.length < 1) {
       throw new Error(
         `Error, There are no shipments for the given freight order Id: ${get(dynamoData, 'FreightOrderId')}, please create a shipment before updating.`
@@ -165,30 +167,56 @@ module.exports.handler = async (event, context) => {
       })
     );
     console.info('wtPayloadsData: ', wtPayloadsData);
-    console.info('results: ', get(initialRecord,'[0].ShipmentDetails', ''));
+    console.info('results: ', get(initialRecord, '[0].ShipmentDetails', ''));
     const updateResponses = [];
+    let updateShipmentsFlag = false;
     await Promise.all(
       wtPayloadsData.map(async (data) => {
         console.info(get(data, 'stopId', ''));
-        const initialPayload = get(initialRecord, '[0].ShipmentDetails[data.stopId]', '');
-        const updateFlag = compareJson(get(initialPayload, 'jsonPayload', ''), get(data, 'jsonPayload', ''));
-        console.info(JSON.stringify(get(data, 'jsonPayload', '')));
+        const initialPayload = get(
+          initialRecord,
+          `[0].ShipmentDetails[${get(data, 'stopId', '')}]`,
+          ''
+        );
+
+        const updateFlag = compareJson(
+          get(initialPayload, 'jsonPayload', ''),
+          get(data, 'jsonPayload', '')
+        );
+
         console.info(updateFlag);
         if (!updateFlag) {
+          dynamoData.Housebill.push(get(initialPayload, 'housebill', ''));
+          dynamoData.FileNumber.push(get(initialPayload, 'fileNumber', ''));
+          updateResponses.push({
+            ...initialPayload,
+            updateFlag,
+          });
+        } else {
+          updateShipmentsFlag = true;
           updateResponses.push({
             initialXmlPayload: get(initialPayload, 'xmlPayload', ''),
-            updatedJsonPayload: get(data, 'jsonPayload', ''),
-            updateXmlPayload: get(data, 'xmlPayload', ''),
+            intialFileNumber: get(initialPayload, 'fileNumber', ''),
+            intialHousebill: get(initialPayload, 'housebill', ''),
+            jsonPayload: JSON.stringify(get(data, 'jsonPayload', '')),
+            xmlPayload: get(data, 'xmlPayload', ''),
             stopId: get(data, 'stopId', ''),
+            updateFlag,
           });
         }
+        console.info(dynamoData.Housebill);
       })
     );
     console.info(updateResponses);
     dynamoData.ShipmentUpdates = updateResponses;
-    if (updateResponses.length > 0) {
+    if (updateShipmentsFlag) {
       dynamoData.Status = 'PENDING';
     } else {
+      initialRecord.LastUpdateEvent.push({
+        id: get(dynamoData, 'Id', ''),
+        time: cstDate.format('YYYY-MM-DD HH:mm:ss SSS'),
+      });
+      await putLogItem(initialRecord);
       dynamoData.Status = 'SUCCESS';
     }
 
@@ -248,5 +276,5 @@ module.exports.handler = async (event, context) => {
 };
 
 function compareJson(initialPayload, newPayload) {
-  return JSON.stringify(initialPayload) === JSON.stringify(newPayload);
+  return !isEqual(initialPayload, newPayload);
 }

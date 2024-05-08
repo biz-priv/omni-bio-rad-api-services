@@ -381,8 +381,6 @@ async function getServiceLevel(stages, source, destination) {
   );
 }
 
-
-
 async function getLbnToken() {
   try {
     const config = {
@@ -453,7 +451,57 @@ async function sendToLbn(token, payload, dynamoData) {
   }
 }
 
+async function cancelShipmentApiCall(housebill) {
+  try {
+    const xmlString = `<?xml version="1.0" encoding="utf-8"?>
+    <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+      <soap:Body>
+        <UpdateStatus xmlns="http://tempuri.org/">
+        <HandlingStation></HandlingStation>
+        <HAWB>${housebill}</HAWB>
+        <UserName>saplbn</UserName>
+        <StatusCode>CAN</StatusCode>
+        </UpdateStatus>
+      </soap:Body>
+    </soap:Envelope>`;
 
+    const config = {
+      url: process.env.ADD_MILESTONE_URL,
+      method: 'post',
+      headers: {
+        'Accept': 'text/xml',
+        'Content-Type': 'text/xml',
+      },
+      data: xmlString,
+    };
+
+    console.info('config: ', config);
+    const res = await axios.request(config);
+    let message = '';
+    if (get(res, 'status', '') !== 200) {
+      console.info(get(res, 'data', ''));
+      throw new Error(`API Request Failed: ${res}`);
+    } else {
+      // Verify if the WT api request is success or failed
+      const response = await xmlJsonConverter(get(res, 'data', ''));
+      message = get(
+        response,
+        'soap:Envelope.soap:Body.UpdateStatusResponse.UpdateStatusResult',
+        ''
+      );
+      console.info('message: ', message);
+      if (message === 'true') {
+        message = 'Success';
+      } else {
+        message = 'Failed';
+      }
+    }
+    return { message, housebill };
+  } catch (error) {
+    console.error(`For ${housebill} API request failed: `, error);
+    return { message: error, housebill };
+  }
+}
 
 module.exports = {
   xmlJsonConverter,
@@ -471,4 +519,5 @@ module.exports = {
   sendToLbn,
   getDocsFromWebsli,
   getLbnToken,
+  cancelShipmentApiCall,
 };

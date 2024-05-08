@@ -2,7 +2,12 @@
 
 const AWS = require('aws-sdk');
 const { get } = require('lodash');
-const { querySourceDb, getLbnToken, sendToLbn, getDocsFromWebsli } = require('../Shared/dataHelper');
+const {
+  querySourceDb,
+  getLbnToken,
+  sendToLbn,
+  getDocsFromWebsli,
+} = require('../Shared/dataHelper');
 const { putLogItem } = require('../Shared/dynamo');
 
 const sns = new AWS.SNS();
