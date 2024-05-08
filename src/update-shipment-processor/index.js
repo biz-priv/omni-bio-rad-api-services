@@ -46,10 +46,12 @@ module.exports.handler = async (event, context) => {
         console.info(CreateDynamoData);
 
         const shipmentUpdates = get(dynamoData, 'ShipmentUpdates', []);
+        CreateDynamoData.ShipmentDetails = []
         for (const data of shipmentUpdates) {
           console.info(data);
           if (get(data, 'updateFlag', false) === false) {
             dynamoData.ShipmentDetails[get(data, 'stopId')] = data;
+            CreateDynamoData.ShipmentDetails[get(data, 'stopId')] = data;
             console.info('Skip the shipment as there is no update in the payload.', data);
             continue;
           }
@@ -98,6 +100,10 @@ module.exports.handler = async (event, context) => {
             ''
           );
 
+          CreateDynamoData.ShipmentDetails[get(data, 'stopId')] = data;
+          CreateDynamoData.ShipmentDetails[get(data, 'stopId')].housebill = housebill;
+          CreateDynamoData.ShipmentDetails[get(data, 'stopId')].fileNumber = fileNumber;
+          CreateDynamoData.ShipmentDetails[get(data, 'stopId')].xmlResponse = xmlResponse;
           dynamoData.ShipmentDetails[get(data, 'stopId')] = data;
           dynamoData.ShipmentDetails[get(data, 'stopId')].housebill = housebill;
           dynamoData.ShipmentDetails[get(data, 'stopId')].fileNumber = fileNumber;
