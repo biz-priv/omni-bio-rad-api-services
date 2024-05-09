@@ -27,9 +27,9 @@ module.exports.handler = async (event, context) => {
   console.info(event);
 
   try {
-    // const eventBody = JSON.parse(get(event, 'body', {}));
+    const eventBody = JSON.parse(get(event, 'body', {}));
 
-    const eventBody = get(event, 'body', {});
+    // const eventBody = get(event, 'body', {});
 
     const attachments = get(eventBody, 'attachments', []);
     if (attachments.length > 0) {
