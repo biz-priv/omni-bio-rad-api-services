@@ -480,7 +480,7 @@ async function cancelShipmentApiCall(housebill) {
     let message = '';
     if (get(res, 'status', '') !== 200) {
       console.info(get(res, 'data', ''));
-      throw new Error(`API Request Failed: ${res}`);
+      throw new Error(`CANCEL API Request Failed: ${res}`);
     } else {
       // Verify if the WT api request is success or failed
       const response = await xmlJsonConverter(get(res, 'data', ''));

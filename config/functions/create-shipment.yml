@@ -17,6 +17,7 @@ function:
         method: POST
         private: true
   environment:
-    WT_URL: ${ssm:/omni-dw/${self:provider.stage}/createShipment/wt/url}
-    # WEBSLI_GET_DOC_URL: ${ssm:/omni-dw/${self:provider.stage}/websli/api/base.url}
+    WT_URL: ${ssm:/omni-dw/${self:provider.stage}/createShipment/wt/url} #TO BE CREATED THROUGH TERRAFORM BIO RAD REPO
+    UPLOAD_DOCUMENT_API: ${ssm:/omni-dw/${self:provider.stage}/api/addDocument}
+    # WEBSLI_GET_DOC_URL: ${ssm:/omni-dw/${self:provider.stage}/websli/api/base.url}  #TO BE CREATED THROUGH TERRAFORM BIO RAD REPO
     # WEBSLI_KEY: ${ssm:/omni-dw/${self:provider.stage}/get-document/websli-key.default}

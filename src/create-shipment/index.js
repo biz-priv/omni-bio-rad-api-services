@@ -3,6 +3,7 @@
 const { get } = require('lodash');
 const AWS = require('aws-sdk');
 const uuid = require('uuid');
+const axios = require('axios');
 const moment = require('moment-timezone');
 const { putLogItem, getData } = require('../Shared/dynamo');
 const {
@@ -26,9 +27,9 @@ module.exports.handler = async (event, context) => {
   console.info(event);
 
   try {
-    const eventBody = JSON.parse(get(event, 'body', {}));
+    // const eventBody = JSON.parse(get(event, 'body', {}));
 
-    // const eventBody = get(event, 'body', {});
+    const eventBody = get(event, 'body', {});
 
     const attachments = get(eventBody, 'attachments', []);
     if (attachments.length > 0) {
@@ -53,6 +54,7 @@ module.exports.handler = async (event, context) => {
     dynamoData.ShipmentDetails = {};
     dynamoData.FileNumber = [];
     dynamoData.Housebill = [];
+    dynamoData.attachmentFileName = [];
     dynamoData.LastUpdateEvent = [];
 
     if (
@@ -218,12 +220,26 @@ module.exports.handler = async (event, context) => {
       dynamoData.Housebill.push(housebill);
     }
 
-    // const filteredAttachments = await attachments.filter(obj => obj.typeCode)
-    // for(const attachment of filteredAttachments){
-    //   for(const housebill of get(dynamoData, 'Housebill', [])){
-
-    //   }
-    // }
+    const filteredAttachments = await attachments.filter((obj) => obj.typeCode);
+    await Promise.all(filteredAttachments.map(async (attachment)=>{
+      dynamoData.attachmentFileName.push(get(attachment, 'description', ''))
+      await Promise.all(get(dynamoData, 'Housebill', []).map(async (housebill)=>{
+        const xmlPayload = `<?xml version="1.0" encoding="utf-8"?>
+        <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+          <soap:Body>
+            <AttachFileToShipment xmlns="http://tempuri.org/">
+              <Filename>${get(attachment, 'description', '')}</Filename>
+              <FileDataBase64>${get(attachment, 'fileContentBinaryObject', '')}</FileDataBase64>
+              <Housebill>${housebill}</Housebill>
+              <CustomerAccess>Yes</CustomerAccess>
+              <DocType>WORK INS</DocType>
+              <PrintWithInvoice>No</PrintWithInvoice>
+            </AttachFileToShipment>
+          </soap:Body>
+        </soap:Envelope>`;
+        await sendAddDocument(xmlPayload);
+      }))
+    }))
 
     dynamoData.Status = 'PENDING';
     await putLogItem(dynamoData);
@@ -279,3 +295,28 @@ module.exports.handler = async (event, context) => {
     };
   }
 };
+
+async function sendAddDocument(xmlString) {
+  try {
+    console.info(xmlString);
+    const config = {
+      url: process.env.UPLOAD_DOCUMENT_API,
+      method: 'post',
+      headers: {
+        'Accept': 'text/xml',
+        'Content-Type': 'text/xml; charset=utf-8',
+        'soapAction': 'http://tempuri.org/AttachFileToShipment'
+      },
+      data: xmlString,
+    }
+    console.info('config: ', config);
+    const res = await axios.request(config);
+    if (get(res, 'status', '') !== 200) {
+      console.info(get(res, 'data', ''));
+      throw new Error(`ADD DOCUMENT API Request Failed: ${res}`);
+    }
+  } catch (error) {
+    console.info(error);
+    throw error
+  }
+}
