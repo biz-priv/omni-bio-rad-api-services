@@ -166,7 +166,7 @@ async function prepareShipperAndConsigneeData(loadingStage, unloadingStage) {
   };
 }
 
-async function prepareReferenceList(loadingStage, unloadingStage, eventBody) {
+async function prepareReferenceList(loadingStage, unloadingStage, dynamoData) {
   const referenceList = {
     ReferenceList: {
       NewShipmentRefsV3: [
@@ -186,7 +186,7 @@ async function prepareReferenceList(loadingStage, unloadingStage, eventBody) {
           RefTypeId: 'STP',
         },
         {
-          ReferenceNo: get(eventBody, 'freightOrderId', ''),
+          ReferenceNo: get(dynamoData, 'FreightOrderId', ''),
           CustomerTypeV3: 'BillTo',
           RefTypeId: 'SID',
         },

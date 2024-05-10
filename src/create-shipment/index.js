@@ -147,7 +147,7 @@ module.exports.handler = async (event, context) => {
         );
         console.info(shipperAndConsignee);
 
-        const referenceList = await prepareReferenceList(loadingStage, unloadingStage, eventBody);
+        const referenceList = await prepareReferenceList(loadingStage, unloadingStage, dynamoData);
         console.info(JSON.stringify(referenceList));
 
         const shipmentLineList = await prepareShipmentLineListDate(get(groupedItems, key, []));
