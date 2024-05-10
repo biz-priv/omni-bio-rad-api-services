@@ -408,7 +408,7 @@ async function getLbnToken() {
 
 async function getDocsFromWebsli({ housebill }) {
   try {
-    const url = `https://websli.omnilogistics.com/wtTest/getwtdoc/v1/json/9980f7b9eaffb71ce2f86734dae062/housebill=${housebill}/doctype=HOUSEBILL|doctype=LABEL`;
+    const url = `${process.env.GET_DOCUMENT_URL}/housebill=${housebill}/doctype=HOUSEBILL|doctype=LABEL`;
     const queryType = await axios.get(url);
     //   console.info('🚀 ~ file: index.js:327 ~ getDocsFromWebsli ~ url:', url);
     const docs = get(queryType, 'data.wtDocs.wtDoc', []);
@@ -466,7 +466,7 @@ async function cancelShipmentApiCall(housebill) {
     </soap:Envelope>`;
 
     const config = {
-      url: process.env.ADD_MILESTONE_URL,
+      url: process.env.CANCEL_SHIPMENT_URL,
       method: 'post',
       headers: {
         'Accept': 'text/xml',

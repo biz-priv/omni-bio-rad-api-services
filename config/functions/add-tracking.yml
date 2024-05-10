@@ -17,7 +17,7 @@ function:
         method: PUT
         private: true
   environment:
-    LOC_URL: ${ssm:/omni-ivia/${self:provider.stage}/addMilestone/loc.url}
+    LOC_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/wt/create-shipment/api.url}
     UPDATE_SOURCE_DB_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/update-source-db-endpoint}
     UPDATE_SOURCE_DB_API_KEY: ${ssm:/omni/${self:provider.stage}/bio-rad/api-key}
     REFERENCE_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/references/ddb.tableName}

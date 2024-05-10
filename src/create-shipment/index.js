@@ -221,10 +221,12 @@ module.exports.handler = async (event, context) => {
     }
 
     const filteredAttachments = await attachments.filter((obj) => obj.typeCode);
-    await Promise.all(filteredAttachments.map(async (attachment)=>{
-      dynamoData.attachmentFileName.push(get(attachment, 'description', ''))
-      await Promise.all(get(dynamoData, 'Housebill', []).map(async (housebill)=>{
-        const xmlPayload = `<?xml version="1.0" encoding="utf-8"?>
+    await Promise.all(
+      filteredAttachments.map(async (attachment) => {
+        dynamoData.attachmentFileName.push(get(attachment, 'description', ''));
+        await Promise.all(
+          get(dynamoData, 'Housebill', []).map(async (housebill) => {
+            const xmlPayload = `<?xml version="1.0" encoding="utf-8"?>
         <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
           <soap:Body>
             <AttachFileToShipment xmlns="http://tempuri.org/">
@@ -237,9 +239,11 @@ module.exports.handler = async (event, context) => {
             </AttachFileToShipment>
           </soap:Body>
         </soap:Envelope>`;
-        await sendAddDocument(xmlPayload);
-      }))
-    }))
+            await sendAddDocument(xmlPayload);
+          })
+        );
+      })
+    );
 
     dynamoData.Status = 'PENDING';
     await putLogItem(dynamoData);
@@ -305,10 +309,10 @@ async function sendAddDocument(xmlString) {
       headers: {
         'Accept': 'text/xml',
         'Content-Type': 'text/xml; charset=utf-8',
-        'soapAction': 'http://tempuri.org/AttachFileToShipment'
+        'soapAction': 'http://tempuri.org/AttachFileToShipment',
       },
       data: xmlString,
-    }
+    };
     console.info('config: ', config);
     const res = await axios.request(config);
     if (get(res, 'status', '') !== 200) {
@@ -317,6 +321,6 @@ async function sendAddDocument(xmlString) {
     }
   } catch (error) {
     console.info(error);
-    throw error
+    throw error;
   }
 }

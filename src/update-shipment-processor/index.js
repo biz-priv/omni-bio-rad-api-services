@@ -29,7 +29,7 @@ module.exports.handler = async (event, context) => {
       records.map(async (record) => {
         console.info(record);
         dynamoData = AWS.DynamoDB.Converter.unmarshall(get(record, 'dynamodb.NewImage'));
-        dynamoData.ShipmentDetails = {}
+        dynamoData.ShipmentDetails = {};
         const Params = {
           TableName: process.env.LOGS_TABLE,
           IndexName: 'FreightOrderId-Index',
@@ -46,7 +46,7 @@ module.exports.handler = async (event, context) => {
         console.info(CreateDynamoData);
 
         const shipmentUpdates = get(dynamoData, 'ShipmentUpdates', []);
-        CreateDynamoData.ShipmentDetails = []
+        CreateDynamoData.ShipmentDetails = [];
         for (const data of shipmentUpdates) {
           console.info(data);
           if (get(data, 'updateFlag', false) === false) {

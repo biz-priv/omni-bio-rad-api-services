@@ -17,6 +17,6 @@ function:
         method: POST
         private: true
   environment:
-    ADD_MILESTONE_URL: ${ssm:/omni-ivia/${self:provider.stage}/addMilestone/url}
+    CANCEL_SHIPMENT_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/wt/add-document/api.url}
     SHIPMENT_HEADER_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/shipment-header/ddb.tableName}
     REFERENCE_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/references/ddb.tableName}

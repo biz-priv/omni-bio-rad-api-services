@@ -20,7 +20,7 @@ function:
         filterPatterns:
           - { dynamodb: { NewImage: { Process: { S: ['UPDATE'] }, Status: { S: ['PENDING'] } } } }
   environment:
-    WT_URL: ${ssm:/omni-dw/${self:provider.stage}/createShipment/wt/url}
+    WT_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/wt/create-shipment/api.url}
     UPDATE_SOURCE_DB_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/update-source-db-endpoint}
     UPDATE_SOURCE_DB_API_KEY: ${ssm:/omni/${self:provider.stage}/bio-rad/api-key}
     LBN_SEND_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-send-endpoint}
@@ -28,4 +28,5 @@ function:
     LBN_TOKEN_USERNAME: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/username}
     LBN_TOKEN_PASSWORD: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/password}
     LBN_TOKEN_AUTHORIZATION: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/authorization}
-    ADD_MILESTONE_URL: ${ssm:/omni-ivia/${self:provider.stage}/addMilestone/url}
+    CANCEL_SHIPMENT_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/wt/add-document/api.url}
+    GET_DOCUMENT_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/wt/get-document/api.url}
