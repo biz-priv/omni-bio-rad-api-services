@@ -68,7 +68,7 @@ module.exports.handler = async (event, context) => {
       statusCode: 200,
       body: JSON.stringify(
         {
-          trackId: get(dynamoData, '[0].housebill', ''),
+          trackId: get(dynamoData, 'Housebill[0]', ''),
         },
         null,
         2
