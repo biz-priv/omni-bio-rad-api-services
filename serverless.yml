@@ -82,6 +82,7 @@ functions:
   update-source-db: ${file(config/functions/update-source-db.yml):function}
   add-tracking: ${file(config/functions/add-tracking.yml):function}
   delete-add-tracking: ${file(config/functions/delete-add-tracking.yml):function}
+  send-order-events: ${file(config/functions/send-order-events.yml):function}
 
 layers:
   NodeModules:

@@ -1,0 +1,13 @@
+---
+function:
+  name: omni-bio-rad-send-order-events-${self:provider.stage}
+  handler: src/send-order-events/index.handler
+  runtime: nodejs20.x
+  timeout: 900
+  layers:
+    - { Ref: NodeModulesLambdaLayer }
+  package:
+    patterns:
+      - '!**/*'
+      - src/send-order-events/**
+      - src/Shared/**
