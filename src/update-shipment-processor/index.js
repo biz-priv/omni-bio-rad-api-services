@@ -46,7 +46,7 @@ module.exports.handler = async (event, context) => {
         console.info(CreateDynamoData);
 
         const shipmentUpdates = get(dynamoData, 'ShipmentUpdates', []);
-        CreateDynamoData.ShipmentDetails = [];
+        CreateDynamoData.ShipmentDetails = {};
         for (const data of shipmentUpdates) {
           console.info(data);
           if (get(data, 'updateFlag', false) === false) {
@@ -110,6 +110,18 @@ module.exports.handler = async (event, context) => {
           dynamoData.ShipmentDetails[get(data, 'stopId')].xmlResponse = xmlResponse;
           dynamoData.Housebill.push(housebill);
           dynamoData.FileNumber.push(fileNumber);
+
+          if (get(data, 'intialFileNumber', '') !== '') {
+            const refernecesUpdateQuery = `insert into tbl_references (FK_OrderNo,CustomerType,ReferenceNo,FK_RefTypeId)
+                                      (select ${fileNumber},customertype,ReferenceNo,'STO' from tbl_references where
+                                      fk_orderno=${get(data, 'intialFileNumber', '')} and customertype in ('S','C') and fk_reftypeid='STO');`;
+            await querySourceDb(refernecesUpdateQuery);
+
+            const trackingNotesUpdateQuery = `insert into tbl_trackingnotes (FK_OrderNo,DateTimeEntered,PublicNote,FK_UserId,EventDateTime,EventTimeZone,ConsolNo,Priority,Note)
+                                        (select ${fileNumber},DateTimeEntered,PublicNote,FK_UserId,EventDateTime,EventTimeZone,ConsolNo,Priority,Note from tbl_trackingnotes where
+                                        fk_orderno=${get(data, 'intialFileNumber', '')} and note like 'technicalId %');`;
+            await querySourceDb(trackingNotesUpdateQuery);
+          }
         }
 
         const fileNumberArray = get(dynamoData, 'FileNumber');

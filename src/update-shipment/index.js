@@ -28,6 +28,19 @@ module.exports.handler = async (event, context) => {
 
     // const eventBody = get(event, 'body', {});
 
+    const attachments = get(eventBody, 'attachments', []);
+    console.info('attachments: ', get(eventBody, 'attachments', []));
+
+    if (attachments.length > 0) {
+      await Promise.all(
+        get(eventBody, 'attachments', []).map(async (attachment) => {
+          console.info(attachment.description);
+          console.info(typeof attachment.fileContentBinaryObject);
+          attachment.fileContentBinaryObject = 'B64String';
+        })
+      );
+    }
+
     let initialRecord;
     if (get(event, 'pathParameters.freightOrderId', '') !== '') {
       const Params = {
@@ -50,7 +63,7 @@ module.exports.handler = async (event, context) => {
     const cstDate = moment().tz('America/Chicago');
     dynamoData.CSTDate = cstDate.format('YYYY-MM-DD');
     dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
-    dynamoData.Event = get(event, 'body', '');
+    dynamoData.Event = JSON.stringify(eventBody);
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
     dynamoData.Process = 'UPDATE';
     dynamoData.FreightOrderId = get(event, 'pathParameters.freightOrderId', '');
@@ -60,6 +73,11 @@ module.exports.handler = async (event, context) => {
     dynamoData.CallInPhone = `${get(eventBody, 'orderingParty.address.phoneNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.phoneNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.phoneNumber.subscriberId', '')}`;
     dynamoData.CallInFax = `${get(eventBody, 'orderingParty.address.faxNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.faxNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.faxNumber.subscriberId', '')}`;
     dynamoData.QuoteContactEmail = get(eventBody, 'orderingParty.address.emailAddress', '');
+    dynamoData.SourceSystemBusinessPartnerID = get(
+      eventBody,
+      'orderingParty.sourceSystemBusinessPartnerID',
+      ''
+    );
     dynamoData.Housebill = [];
     dynamoData.FileNumber = [];
     if (initialRecord.length < 1) {

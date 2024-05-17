@@ -32,16 +32,23 @@ module.exports.handler = async (event, context) => {
     // const eventBody = get(event, 'body', {});
 
     const attachments = get(eventBody, 'attachments', []);
+    console.info('attachments: ', get(eventBody, 'attachments', []));
+
     if (attachments.length > 0) {
-      delete eventBody.attachments;
+      await Promise.all(
+        get(eventBody, 'attachments', []).map(async (attachment) => {
+          console.info(attachment.description);
+          console.info(typeof attachment.fileContentBinaryObject);
+          attachment.fileContentBinaryObject = 'B64String';
+        })
+      );
     }
-    console.info('attachements: ', attachments);
 
     // Set the time zone to CST
     const cstDate = moment().tz('America/Chicago');
     dynamoData.CSTDate = cstDate.format('YYYY-MM-DD');
     dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
-    dynamoData.Event = get(event, 'body', '');
+    dynamoData.Event = JSON.stringify(eventBody);
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
     dynamoData.Process = 'CREATE';
     dynamoData.FreightOrderId = get(eventBody, 'freightOrderId', '');
@@ -51,10 +58,14 @@ module.exports.handler = async (event, context) => {
     dynamoData.CallInPhone = `${get(eventBody, 'orderingParty.address.phoneNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.phoneNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.phoneNumber.subscriberId', '')}`;
     dynamoData.CallInFax = `${get(eventBody, 'orderingParty.address.faxNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.faxNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.faxNumber.subscriberId', '')}`;
     dynamoData.QuoteContactEmail = get(eventBody, 'orderingParty.address.emailAddress', '');
+    dynamoData.SourceSystemBusinessPartnerID = get(
+      eventBody,
+      'orderingParty.sourceSystemBusinessPartnerID',
+      ''
+    );
     dynamoData.ShipmentDetails = {};
     dynamoData.FileNumber = [];
     dynamoData.Housebill = [];
-    dynamoData.attachmentFileName = [];
     dynamoData.LastUpdateEvent = [];
 
     if (
@@ -223,7 +234,6 @@ module.exports.handler = async (event, context) => {
     const filteredAttachments = await attachments.filter((obj) => obj.typeCode);
     await Promise.all(
       filteredAttachments.map(async (attachment) => {
-        dynamoData.attachmentFileName.push(get(attachment, 'description', ''));
         await Promise.all(
           get(dynamoData, 'Housebill', []).map(async (housebill) => {
             const xmlPayload = `<?xml version="1.0" encoding="utf-8"?>

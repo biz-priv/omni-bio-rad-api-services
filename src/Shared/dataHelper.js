@@ -5,6 +5,7 @@ const { get } = require('lodash');
 const axios = require('axios');
 const moment = require('moment-timezone');
 const xmlJs = require('xml-js');
+const { getData } = require('./dynamo');
 
 async function xmlJsonConverter(xmlData) {
   try {
@@ -189,6 +190,11 @@ async function prepareReferenceList(loadingStage, unloadingStage, dynamoData) {
           ReferenceNo: get(dynamoData, 'FreightOrderId', ''),
           CustomerTypeV3: 'BillTo',
           RefTypeId: 'SID',
+        },
+        {
+          ReferenceNo: get(dynamoData, 'SourceSystemBusinessPartnerID', ''),
+          CustomerTypeV3: 'BillTo',
+          RefTypeId: 'STP',
         },
       ],
     },
@@ -503,6 +509,21 @@ async function cancelShipmentApiCall(housebill) {
   }
 }
 
+async function fetchTackingData(orderNo) {
+  const params = {
+    TableName: 'omni-wt-rt-tracking-notes-dev',
+    KeyConditionExpression: 'FK_OrderN = :FK_OrderN',
+    ExpressionAttributeValues: {
+      ':FK_OrderN': orderNo,
+    },
+  };
+  const res = await getData(params);
+  const trackingData = get(res, 'Items', []).find((obj) =>
+    get(obj, 'Note', '').includes('technicalid')
+  );
+  return get(trackingData, 'Note', '');
+}
+
 module.exports = {
   xmlJsonConverter,
   querySourceDb,
@@ -520,4 +541,5 @@ module.exports = {
   getDocsFromWebsli,
   getLbnToken,
   cancelShipmentApiCall,
+  fetchTackingData,
 };
