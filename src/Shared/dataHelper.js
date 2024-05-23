@@ -412,18 +412,16 @@ async function getLbnToken() {
   }
 }
 
-async function getDocsFromWebsli({ housebill }) {
+async function getDocsFromWebsli({ housebill, doctype }) {
   try {
-    const url = `${process.env.GET_DOCUMENT_URL}/housebill=${housebill}/doctype=HOUSEBILL|doctype=LABEL`;
+    const url = `${process.env.GET_DOCUMENT_URL}/housebill=${housebill}/${doctype}`;
     const queryType = await axios.get(url);
-    //   console.info('🚀 ~ file: index.js:327 ~ getDocsFromWebsli ~ url:', url);
     const docs = get(queryType, 'data.wtDocs.wtDoc', []);
     return docs.map((doc) => ({
       filename: doc.filename,
       b64str: doc.b64str,
     }));
   } catch (error) {
-    //   console.info('🙂 -> file: pod-doc-sender.js:207 -> getDocsFromWebsli -> error:', error);
     const message = get(error, 'response.data', '');
     console.error(
       'error while calling websli endpoint: ',
@@ -510,18 +508,97 @@ async function cancelShipmentApiCall(housebill) {
 }
 
 async function fetchTackingData(orderNo) {
+  try{
   const params = {
     TableName: 'omni-wt-rt-tracking-notes-dev',
-    KeyConditionExpression: 'FK_OrderN = :FK_OrderN',
+    IndexName: `omni-tracking-notes-orderNo-index-${process.env.STAGE}`,
+    KeyConditionExpression: 'FK_OrderNo = :FK_OrderNo',
     ExpressionAttributeValues: {
-      ':FK_OrderN': orderNo,
+      ':FK_OrderNo': orderNo,
     },
   };
   const res = await getData(params);
-  const trackingData = get(res, 'Items', []).find((obj) =>
-    get(obj, 'Note', '').includes('technicalid')
+  console.info(res)
+  const trackingData = res.find((obj) =>
+    get(obj, 'Note', '').includes('technicalId')
   );
-  return get(trackingData, 'Note', '');
+  return trackingData;
+}catch(error){
+  console.info('Error while fetching tracking data: ', error)
+  throw error
+}
+}
+
+async function fetchRefernceNo(orderNo) {
+  try{
+  const params = {
+    TableName: process.env.REFERENCE_TABLE,
+    IndexName: `omni-wt-rt-ref-orderNo-index-${process.env.STAGE}`,
+    KeyConditionExpression: 'FK_OrderNo = :FK_OrderNo',
+    ExpressionAttributeValues: {
+      ':FK_OrderNo': orderNo,
+    },
+  };
+  const res = await getData(params);
+  return get(res, 'Items', []);
+}catch(error){
+  console.info('Error while fetching reference data: ', error)
+  throw error
+}
+}
+
+async function fetchShipmentFile(orderNo) {
+  try{
+  const params = {
+    TableName: 'omni-wt-rt-shipment-file-dev',
+    KeyConditionExpression: 'FK_OrderNo = :FK_OrderNo',
+    ExpressionAttributeValues: {
+      ':FK_OrderNo': orderNo,
+    },
+  };
+  const res = await getData(params);
+  return get(res, 'Items', []);
+}catch(error){
+  console.info('Error while fetching shipment file: ', error)
+  throw error
+}
+}
+
+async function modifyTime(dateTime) {
+  try{
+    const dateTimeUTC = moment.tz(dateTime, 'UTC');
+    const weekNumber = dateTimeUTC.isoWeek();
+    let hoursToAdd;
+    if(weekNumber >= 11 && weekNumber <= 44){
+      hoursToAdd = 5
+    } else{
+      hoursToAdd = 6
+    }
+
+    dateTimeUTC.add(hoursToAdd, 'hours');
+
+    return dateTimeUTC.format('YYYY-MM-DDTHH:mm:ss[Z]');
+  }catch(error){
+    console.info('Modify time: ', error)
+    throw error
+  }
+}
+
+async function getOffset(dateTime) {
+  try{
+    const params = {
+      TableName: 'omni-wt-rt-timezone-master-dev',
+      KeyConditionExpression: 'PK_TimeZoneCode = :PK_TimeZoneCode',
+      ExpressionAttributeValues: {
+        ':PK_TimeZoneCode': dateTime,
+      },
+    };
+    const res = await getData(params);
+    return get(res, 'Items[0].HoursAway', 0);
+  }catch(error){
+    console.info('Modify time: ', error)
+    throw error
+  }
 }
 
 module.exports = {
@@ -542,4 +619,8 @@ module.exports = {
   getLbnToken,
   cancelShipmentApiCall,
   fetchTackingData,
+  fetchRefernceNo,
+  fetchShipmentFile,
+  modifyTime,
+  getOffset
 };

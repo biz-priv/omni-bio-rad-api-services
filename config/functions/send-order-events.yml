@@ -17,3 +17,6 @@ function:
         batchSize: 10
   environment:
     SHIPMENT_HEADER_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/shipment-header/ddb.tableName}
+    REFERENCE_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/references/ddb.tableName}
+    BIO_RAD_BILL_TO_NUMBERS: ${ssm:/omni/${self:provider.stage}/bio-rad/bill-to/numbers}
+    LBN_SEND_ORDER_EVENTS_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-send-order-events-endpoint}

@@ -81,15 +81,21 @@ module.exports.handler = async (event, context) => {
         TableName: process.env.LOGS_TABLE,
         IndexName: 'FreightOrderId-Index',
         KeyConditionExpression: 'FreightOrderId = :FreightOrderId',
+        FilterExpression: '#status = :status AND #process = :process',
+        ExpressionAttributeNames: {
+          '#status': 'Status',
+          '#process': 'Process'
+        },      
         ExpressionAttributeValues: {
           ':FreightOrderId': get(dynamoData, 'FreightOrderId', ''),
+          ':status': 'SUCCESS',
+          ':process': 'CREATE'
         },
       };
 
       const Result = await getData(Params);
-      const data = Result.filter((obj) => obj.Process === 'CREATE' && obj.Status === 'SUCCESS');
-      console.info(data);
-      if (data.length > 0) {
+      console.info(Result);
+      if (Result.length > 0) {
         throw new Error(
           `Error, Shipments already created for the provided freight order Id: ${get(dynamoData, 'FreightOrderId', '')}`
         );
