@@ -22,10 +22,11 @@ let orderStatus;
 module.exports.handler = async (event) => {
   try {
     console.info(event);
-    const record = get(event, 'Records[0]', {});
+    const record = get(event, 'Records[2]', {});
 
-    console.info(record);
-    const recordBody = JSON.parse(get(record, 'body', ''));
+    console.info('record: ', record);
+    const recordBody = JSON.parse(get(record, 'body', {}));
+    console.info('recordBody: ', recordBody);
     console.info(recordBody.Message);
     const message = JSON.parse(get(recordBody, 'Message', ''));
     console.info(message);
@@ -60,12 +61,12 @@ module.exports.handler = async (event) => {
       if (get(message, 'dynamoTableName', '') === `omni-wt-rt-apar-failure-${process.env.STAGE}`) {
         eventType = 'exceptions';
         orderStatus = get(data, 'FDCode', '');
-      } else if (['HAWB', 'HCPOD', 'POD'].includes(get(data, 'fk_orderstatusid', ''))) {
+      } else if (['HAWB', 'HCPOD', 'POD'].includes(get(data, 'FK_OrderStatusId', ''))) {
         eventType = 'documents';
-        orderStatus = get(data, 'fk_orderstatusid', '');
+        orderStatus = get(data, 'FK_OrderStatusId', '');
       } else {
         eventType = 'milestones';
-        orderStatus = get(data, 'fk_orderstatusid', '');
+        orderStatus = get(data, 'FK_OrderStatusId', '');
       }
 
       console.info(data);
@@ -136,7 +137,6 @@ async function getPayloadData(orderNo, housebill, location, data) {
   try {
     console.info(orderNo);
     const trackingData = await fetchTackingData(orderNo);
-    console.info(trackingData);
     const referenceData = await fetchRefernceNo(orderNo);
     const orderId = get(referenceData.find(
       (obj) => get(obj, 'CustomerType') === 'B' && get(obj, 'FK_RefTypeId') === 'SID'
@@ -148,8 +148,7 @@ async function getPayloadData(orderNo, housebill, location, data) {
       (obj) => get(obj, 'CustomerType') === 'C' && get(obj, 'FK_RefTypeId') === 'STO'
     ), 'ReferenceNo', '');
 
-    console.info(orderId, slocid, clocid)
-    return
+    console.info('orderId, slocid, clocid',orderId, slocid, clocid)
 
     const stopIdValue = {
       slocid,
@@ -159,22 +158,37 @@ async function getPayloadData(orderNo, housebill, location, data) {
     let events;
     let creationDateTimeUTC;
     if (eventType === 'milestones') {
+      console.info(orderStatus)
       const eventObj = get(CONSTANTS, eventType, []).find((obj) =>
         get(obj, 'statusType', []).includes(orderStatus)
       );
+      console.info('eventObj: ', eventObj)
       creationDateTimeUTC = moment.tz(get(data, 'CreateDateTime', ''), 'UTC');
       creationDateTimeUTC = creationDateTimeUTC.format('YYYY-MM-DDTHH:mm:ss');
-      const weekNumber = creationDateTimeUTC.isoWeek();
+      console.info(creationDateTimeUTC)
+      const weekNumber = moment.tz(creationDateTimeUTC, 'UTC').week();
+      // const weekNumber = creationDateTimeUTC.isoWeek();
       let hoursToAdd;
       if (weekNumber >= 11 && weekNumber <= 44) {
         hoursToAdd = 5;
       } else {
         hoursToAdd = 6;
       }
-      creationDateTimeUTC = creationDateTimeUTC.utcOffset(`0${hoursToAdd}:00`);
+
+      // creationDateTimeUTC = creationDateTimeUTC.utcOffset(`0${hoursToAdd}:00`);
+      creationDateTimeUTC = moment.utc(creationDateTimeUTC).utcOffset(5);
+      creationDateTimeUTC = creationDateTimeUTC.format('YYYY-MM-DDTHH:mm:ssZ');
+      creationDateTimeUTC = moment.utc(creationDateTimeUTC).add(hoursToAdd, 'hours');
+      creationDateTimeUTC = creationDateTimeUTC.format('YYYY-MM-DDTHH:mm:ssZ');
+      console.info('creationDateTimeUTC: ', creationDateTimeUTC);
       const substractTime = await getOffset(get(data, 'EventTimeZone', ''));
+      console.info('substractTime: ', substractTime)
       let eventDateTimeUTC = await modifyTime(get(data, 'EventDateTime', ''));
-      eventDateTimeUTC = eventDateTimeUTC.subtract(Number(substractTime), 'hours');
+      console.info('eventDateTimeUTC: ', eventDateTimeUTC)
+      eventDateTimeUTC = moment.utc(eventDateTimeUTC).subtract(substractTime, 'hours');
+      eventDateTimeUTC = eventDateTimeUTC.format('YYYY-MM-DDTHH:mm:ssZ')
+      console.info('eventDateTimeUTC: ', eventDateTimeUTC)
+      // eventDateTimeUTC = eventDateTimeUTC.subtract(Number(substractTime), 'hours');
 
       events = [
         {
@@ -185,6 +199,7 @@ async function getPayloadData(orderNo, housebill, location, data) {
         },
       ];
     } else if (eventType === 'exceptions') {
+      console.info('orderStatus: ', orderStatus)
       const eventObj = get(CONSTANTS, eventType, []).find((obj) =>
         get(obj, 'statusType', []).includes(orderStatus)
       );
@@ -253,7 +268,9 @@ async function getPayloadData(orderNo, housebill, location, data) {
         },
       };
 
+console.info((Params))
       const Result = await getData(Params);
+      console.info('bio rad data: ', Result)
 
     return {
       shipper: {

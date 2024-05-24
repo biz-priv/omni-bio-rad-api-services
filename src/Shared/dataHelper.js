@@ -557,7 +557,7 @@ async function fetchShipmentFile(orderNo) {
     },
   };
   const res = await getData(params);
-  return get(res, 'Items', []);
+  return res;
 }catch(error){
   console.info('Error while fetching shipment file: ', error)
   throw error
