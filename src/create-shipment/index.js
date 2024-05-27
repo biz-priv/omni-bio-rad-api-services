@@ -84,12 +84,12 @@ module.exports.handler = async (event, context) => {
         FilterExpression: '#status = :status AND #process = :process',
         ExpressionAttributeNames: {
           '#status': 'Status',
-          '#process': 'Process'
-        },      
+          '#process': 'Process',
+        },
         ExpressionAttributeValues: {
           ':FreightOrderId': get(dynamoData, 'FreightOrderId', ''),
           ':status': 'SUCCESS',
-          ':process': 'CREATE'
+          ':process': 'CREATE',
         },
       };
 

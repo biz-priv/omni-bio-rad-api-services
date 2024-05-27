@@ -133,39 +133,52 @@ module.exports.handler = async (event) => {
   }
 };
 
+
 async function getPayloadData(orderNo, housebill, location, data) {
   try {
     console.info(orderNo);
     const trackingData = await fetchTackingData(orderNo);
     const referenceData = await fetchRefernceNo(orderNo);
-    const orderId = get(referenceData.find(
-      (obj) => get(obj, 'CustomerType') === 'B' && get(obj, 'FK_RefTypeId') === 'SID'
-    ), 'ReferenceNo', '');
-    const slocid = get(referenceData.find(
-      (obj) => get(obj, 'CustomerType') === 'S' && get(obj, 'FK_RefTypeId') === 'STO'
-    ), 'ReferenceNo', '');
-    const clocid = get(referenceData.find(
-      (obj) => get(obj, 'CustomerType') === 'C' && get(obj, 'FK_RefTypeId') === 'STO'
-    ), 'ReferenceNo', '');
+    const orderId = get(
+      referenceData.find(
+        (obj) => get(obj, 'CustomerType') === 'B' && get(obj, 'FK_RefTypeId') === 'SID'
+      ),
+      'ReferenceNo',
+      ''
+    );
+    const slocid = get(
+      referenceData.find(
+        (obj) => get(obj, 'CustomerType') === 'S' && get(obj, 'FK_RefTypeId') === 'STO'
+      ),
+      'ReferenceNo',
+      ''
+    );
+    const clocid = get(
+      referenceData.find(
+        (obj) => get(obj, 'CustomerType') === 'C' && get(obj, 'FK_RefTypeId') === 'STO'
+      ),
+      'ReferenceNo',
+      ''
+    );
 
-    console.info('orderId, slocid, clocid',orderId, slocid, clocid)
+    console.info('orderId, slocid, clocid', orderId, slocid, clocid);
 
     const stopIdValue = {
       slocid,
-      clocid
+      clocid,
     };
 
     let events;
     let creationDateTimeUTC;
     if (eventType === 'milestones') {
-      console.info(orderStatus)
+      console.info(orderStatus);
       const eventObj = get(CONSTANTS, eventType, []).find((obj) =>
         get(obj, 'statusType', []).includes(orderStatus)
       );
-      console.info('eventObj: ', eventObj)
+      console.info('eventObj: ', eventObj);
       creationDateTimeUTC = moment.tz(get(data, 'CreateDateTime', ''), 'UTC');
       creationDateTimeUTC = creationDateTimeUTC.format('YYYY-MM-DDTHH:mm:ss');
-      console.info(creationDateTimeUTC)
+      console.info(creationDateTimeUTC);
       const weekNumber = moment.tz(creationDateTimeUTC, 'UTC').week();
       // const weekNumber = creationDateTimeUTC.isoWeek();
       let hoursToAdd;
@@ -182,12 +195,12 @@ async function getPayloadData(orderNo, housebill, location, data) {
       creationDateTimeUTC = creationDateTimeUTC.format('YYYY-MM-DDTHH:mm:ssZ');
       console.info('creationDateTimeUTC: ', creationDateTimeUTC);
       const substractTime = await getOffset(get(data, 'EventTimeZone', ''));
-      console.info('substractTime: ', substractTime)
+      console.info('substractTime: ', substractTime);
       let eventDateTimeUTC = await modifyTime(get(data, 'EventDateTime', ''));
-      console.info('eventDateTimeUTC: ', eventDateTimeUTC)
+      console.info('eventDateTimeUTC: ', eventDateTimeUTC);
       eventDateTimeUTC = moment.utc(eventDateTimeUTC).subtract(substractTime, 'hours');
-      eventDateTimeUTC = eventDateTimeUTC.format('YYYY-MM-DDTHH:mm:ssZ')
-      console.info('eventDateTimeUTC: ', eventDateTimeUTC)
+      eventDateTimeUTC = eventDateTimeUTC.format('YYYY-MM-DDTHH:mm:ssZ');
+      console.info('eventDateTimeUTC: ', eventDateTimeUTC);
       // eventDateTimeUTC = eventDateTimeUTC.subtract(Number(substractTime), 'hours');
 
       events = [
@@ -199,7 +212,7 @@ async function getPayloadData(orderNo, housebill, location, data) {
         },
       ];
     } else if (eventType === 'exceptions') {
-      console.info('orderStatus: ', orderStatus)
+      console.info('orderStatus: ', orderStatus);
       const eventObj = get(CONSTANTS, eventType, []).find((obj) =>
         get(obj, 'statusType', []).includes(orderStatus)
       );
@@ -240,44 +253,45 @@ async function getPayloadData(orderNo, housebill, location, data) {
           natureOfEvent: '01',
           eventType: get(CONSTANTS, `${eventType}.${orderStatus}`, ''),
           eventDateTimeUTC: creationDateTimeUTC,
-          attachments: [
-            {
-              fileName: docData.filename,
-              mimeType: 'application/pdf',
-              fileContentBinaryObject: docData.b64str,
-            },
-          ],
+          attachments: [],
           stopId: get(stopIdValue, stopId, ''),
         },
       ];
+      if (docData.length > 0) {
+        events[0].attachments.push({
+          fileName: get(docData, 'filename', ''),
+          mimeType: 'application/pdf',
+          fileContentBinaryObject: get(docData, 'b64str', ''),
+        });
+      }
     }
 
     const Params = {
-        TableName: process.env.LOGS_TABLE,
-        IndexName: 'FreightOrderId-Index',
-        KeyConditionExpression: 'FreightOrderId = :FreightOrderId',
-        FilterExpression: '#status = :status AND #process = :process',
-        ExpressionAttributeNames: {
-          '#status': 'Status',
-          '#process': 'Process'
-        },      
-        ExpressionAttributeValues: {
-          ':FreightOrderId': orderId,
-          ':status': 'SUCCESS',
-          ':process': 'CREATE'
-        },
-      };
+      TableName: process.env.LOGS_TABLE,
+      IndexName: 'FreightOrderId-Index',
+      KeyConditionExpression: 'FreightOrderId = :FreightOrderId',
+      FilterExpression: '#status = :status AND #process = :process',
+      ExpressionAttributeNames: {
+        '#status': 'Status',
+        '#process': 'Process',
+      },
+      ExpressionAttributeValues: {
+        ':FreightOrderId': orderId,
+        ':status': 'SUCCESS',
+        ':process': 'CREATE',
+      },
+    };
 
-console.info((Params))
-      const Result = await getData(Params);
-      console.info('bio rad data: ', Result)
+    console.info(Params);
+    const Result = await getData(Params);
+    console.info('bio rad data: ', Result);
 
     return {
       shipper: {
-        shipperLBNID: '10020002328',
+        shipperLBNID: get(Result, '[0].OrderingPartyLbnId', ''),
       },
       carrier: {
-        carrierLBNID: '10020002561',
+        carrierLBNID: get(Result, '[0].CarrierPartyLbnId', ''),
       },
       technicalId: get(trackingData, 'Note', ''),
       orderId,

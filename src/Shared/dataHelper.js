@@ -427,6 +427,9 @@ async function getDocsFromWebsli({ housebill, doctype }) {
       'error while calling websli endpoint: ',
       message === '' ? error.message : message
     );
+    if (message === 'not found') {
+      return [];
+    }
     throw error;
   }
 }
@@ -508,84 +511,81 @@ async function cancelShipmentApiCall(housebill) {
 }
 
 async function fetchTackingData(orderNo) {
-  try{
-  const params = {
-    TableName: 'omni-wt-rt-tracking-notes-dev',
-    IndexName: `omni-tracking-notes-orderNo-index-${process.env.STAGE}`,
-    KeyConditionExpression: 'FK_OrderNo = :FK_OrderNo',
-    ExpressionAttributeValues: {
-      ':FK_OrderNo': orderNo,
-    },
-  };
-  const res = await getData(params);
-  console.info(res)
-  const trackingData = res.find((obj) =>
-    get(obj, 'Note', '').includes('technicalId')
-  );
-  return trackingData;
-}catch(error){
-  console.info('Error while fetching tracking data: ', error)
-  throw error
-}
+  try {
+    const params = {
+      TableName: 'omni-wt-rt-tracking-notes-dev',
+      IndexName: `omni-tracking-notes-orderNo-index-${process.env.STAGE}`,
+      KeyConditionExpression: 'FK_OrderNo = :FK_OrderNo',
+      ExpressionAttributeValues: {
+        ':FK_OrderNo': orderNo,
+      },
+    };
+    const res = await getData(params);
+    const trackingData = res.find((obj) => get(obj, 'Note', '').includes('technicalId'));
+    return trackingData;
+  } catch (error) {
+    console.info('Error while fetching tracking data: ', error);
+    throw error;
+  }
 }
 
 async function fetchRefernceNo(orderNo) {
-  try{
-  const params = {
-    TableName: process.env.REFERENCE_TABLE,
-    IndexName: `omni-wt-rt-ref-orderNo-index-${process.env.STAGE}`,
-    KeyConditionExpression: 'FK_OrderNo = :FK_OrderNo',
-    ExpressionAttributeValues: {
-      ':FK_OrderNo': orderNo,
-    },
-  };
-  const res = await getData(params);
-  return get(res, 'Items', []);
-}catch(error){
-  console.info('Error while fetching reference data: ', error)
-  throw error
-}
+  try {
+    const params = {
+      TableName: process.env.REFERENCE_TABLE,
+      IndexName: `omni-wt-rt-ref-orderNo-index-${process.env.STAGE}`,
+      KeyConditionExpression: 'FK_OrderNo = :FK_OrderNo',
+      ExpressionAttributeValues: {
+        ':FK_OrderNo': orderNo,
+      },
+    };
+    const res = await getData(params);
+    return res;
+  } catch (error) {
+    console.info('Error while fetching reference data: ', error);
+    throw error;
+  }
 }
 
 async function fetchShipmentFile(orderNo) {
-  try{
-  const params = {
-    TableName: 'omni-wt-rt-shipment-file-dev',
-    KeyConditionExpression: 'FK_OrderNo = :FK_OrderNo',
-    ExpressionAttributeValues: {
-      ':FK_OrderNo': orderNo,
-    },
-  };
-  const res = await getData(params);
-  return res;
-}catch(error){
-  console.info('Error while fetching shipment file: ', error)
-  throw error
-}
+  try {
+    const params = {
+      TableName: 'omni-wt-rt-shipment-file-dev',
+      KeyConditionExpression: 'FK_OrderNo = :FK_OrderNo',
+      ExpressionAttributeValues: {
+        ':FK_OrderNo': orderNo,
+      },
+    };
+    const res = await getData(params);
+    return res;
+  } catch (error) {
+    console.info('Error while fetching shipment file: ', error);
+    throw error;
+  }
 }
 
 async function modifyTime(dateTime) {
-  try{
+  try {
     const dateTimeUTC = moment.tz(dateTime, 'UTC');
     const weekNumber = dateTimeUTC.isoWeek();
     let hoursToAdd;
-    if(weekNumber >= 11 && weekNumber <= 44){
-      hoursToAdd = 5
-    } else{
-      hoursToAdd = 6
+    if (weekNumber >= 11 && weekNumber <= 44) {
+      hoursToAdd = 5;
+    } else {
+      hoursToAdd = 6;
     }
 
     dateTimeUTC.add(hoursToAdd, 'hours');
 
     return dateTimeUTC.format('YYYY-MM-DDTHH:mm:ss[Z]');
-  }catch(error){
-    console.info('Modify time: ', error)
-    throw error
+  } catch (error) {
+    console.info('Modify time: ', error);
+    throw error;
   }
 }
 
 async function getOffset(dateTime) {
-  try{
+  try {
     const params = {
       TableName: 'omni-wt-rt-timezone-master-dev',
       KeyConditionExpression: 'PK_TimeZoneCode = :PK_TimeZoneCode',
@@ -594,10 +594,10 @@ async function getOffset(dateTime) {
       },
     };
     const res = await getData(params);
-    return get(res, 'Items[0].HoursAway', 0);
-  }catch(error){
-    console.info('Modify time: ', error)
-    throw error
+    return get(res, '[0].HoursAway', 0);
+  } catch (error) {
+    console.info('Modify time: ', error);
+    throw error;
   }
 }
 
@@ -622,5 +622,5 @@ module.exports = {
   fetchRefernceNo,
   fetchShipmentFile,
   modifyTime,
-  getOffset
+  getOffset,
 };

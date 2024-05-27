@@ -39,7 +39,10 @@ module.exports.handler = async (event, context) => {
         await querySourceDb(updateQuery);
 
         const documentPromises = get(dynamoData, 'Housebill', []).map(async (housebill) => {
-          const data = await getDocsFromWebsli({ housebill, doctype: 'doctype=HOUSEBILL|doctype=LABEL' });
+          const data = await getDocsFromWebsli({
+            housebill,
+            doctype: 'doctype=HOUSEBILL|doctype=LABEL',
+          });
           return { data, housebill };
         });
 

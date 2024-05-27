@@ -2,10 +2,9 @@
 
 const { get } = require('lodash');
 const AWS = require('aws-sdk');
-const { putLogItem, getData } = require('../Shared/dynamo');
+const { putLogItem } = require('../Shared/dynamo');
 const uuid = require('uuid');
 const moment = require('moment-timezone');
-const axios = require('axios');
 const { querySourceDb } = require('../Shared/dataHelper');
 
 const sns = new AWS.SNS();
@@ -39,7 +38,7 @@ module.exports.handler = async (event, context) => {
         let locId;
         try {
           locId = get(stop, 'location.Id', '').split(':')[6];
-          const query = `insert into tbl_references (FK_OrderNo,CustomerType,ReferenceNo,FK_RefTypeId) (select fk_orderno,customertype,'${get(stop, 'stopId', '')}','STO' from tbl_references where referenceno='${locId}' and customertype in ('S','C') and fk_reftypeid='STP' and fk_orderno in (select fk_orderno from tbl_references where customertype='B' and fk_reftypeid='SID' and referenceno='${get(dynamoData, 'FreightOrderId', '')}') and fk_orderno not in (select fk_orderno from tbl_references where customertype in ('S','C') and fk_reftypeid='SID'))`;
+          const query = `insert into tbl_references (FK_OrderNo,CustomerType,ReferenceNo,FK_RefTypeId) (select fk_orderno,customertype,'${get(stop, 'stopId', '')}','STO' from tbl_references where referenceno='${locId}' and customertype in ('S','C') and fk_reftypeid='STP' and fk_orderno in (select fk_orderno from tbl_references where customertype='B' and fk_reftypeid='SID' and referenceno='${get(dynamoData, 'FreightOrderId', '')}') and fk_orderno not in (select fk_orderno from tbl_references where customertype in ('S','C') and fk_reftypeid='STO'))`;
           console.info(query);
           await querySourceDb(query);
           return true;
@@ -51,16 +50,14 @@ module.exports.handler = async (event, context) => {
     );
     console.info(stopsUpdateResults);
 
-    const fileNumbers = await getFileNumbers(get(dynamoData, 'FreightOrderId', ''));
+    try {
+      const trackingNotesQuery = `insert into tbl_trackingnotes (FK_OrderNo,datetimeentered,publicnote,FK_UserId,eventdatetime,Note) (select fk_orderno,CURRENT_TIMESTAMP,'N','saplbn',CURRENT_TIMESTAMP,'technicalId ${get(dynamoData, 'TechnicalId', '')}' from tbl_references where customertype='B' and fk_reftypeid='SID' and referenceno='${get(dynamoData, 'FreightOrderId', '')}')`;
 
-    await Promise.all(
-      fileNumbers.map(async (fileNumber) => {
-        console.info(fileNumber);
-        const payload = await preparePayload(fileNumber);
-        console.info(payload);
-        await sendToWT(payload);
-      })
-    );
+      await querySourceDb(trackingNotesQuery);
+    } catch (trackingNotesError) {
+      console.info('Error while adding the tracking notes', trackingNotesError);
+      throw trackingNotesError;
+    }
 
     dynamoData.Status = 'SUCCESS';
     await putLogItem(dynamoData);
@@ -116,94 +113,95 @@ module.exports.handler = async (event, context) => {
   }
 };
 
-async function getFileNumbers(referenceNo) {
-  try {
-    const referenceParams = {
-      TableName: process.env.REFERENCE_TABLE,
-      IndexName: 'ReferenceNo-FK_RefTypeId-index',
-      KeyConditionExpression: 'ReferenceNo = :ReferenceNo and FK_RefTypeId = :FK_RefTypeId',
-      ExpressionAttributeValues: {
-        ':ReferenceNo': referenceNo,
-        ':FK_RefTypeId': 'SID',
-      },
-    };
-    const referenceResult = await getData(referenceParams);
-    if (referenceResult.length === 0) {
-      throw new Error(
-        `Inserted data into references but there is no data for the given freigth order Id: ${referenceNo}`
-      );
-    }
-    const fileNumbers = referenceResult.map((item) => get(item, 'FK_OrderNo', ''));
-    return fileNumbers;
-  } catch (error) {
-    console.info('Error while fetching file numbers based on referenceNo', error);
-    throw error;
-  }
-}
 
-async function preparePayload(fileNumber) {
-  try {
-    const shipmentHeaderParams = {
-      TableName: process.env.SHIPMENT_HEADER_TABLE,
-      KeyConditionExpression: 'PK_OrderNo = :PK_OrderNo',
-      ExpressionAttributeValues: {
-        ':PK_OrderNo': fileNumber,
-      },
-    };
-    const shipmentHeaderResult = await getData(shipmentHeaderParams);
-    const housebill = get(shipmentHeaderResult, '[0].Housebill', '');
+// async function getFileNumbers(referenceNo) {
+//   try {
+//     const referenceParams = {
+//       TableName: process.env.REFERENCE_TABLE,
+//       IndexName: 'ReferenceNo-FK_RefTypeId-index',
+//       KeyConditionExpression: 'ReferenceNo = :ReferenceNo and FK_RefTypeId = :FK_RefTypeId',
+//       ExpressionAttributeValues: {
+//         ':ReferenceNo': referenceNo,
+//         ':FK_RefTypeId': 'SID',
+//       },
+//     };
+//     const referenceResult = await getData(referenceParams);
+//     if (referenceResult.length === 0) {
+//       throw new Error(
+//         `Inserted data into references but there is no data for the given freigth order Id: ${referenceNo}`
+//       );
+//     }
+//     const fileNumbers = referenceResult.map((item) => get(item, 'FK_OrderNo', ''));
+//     return fileNumbers;
+//   } catch (error) {
+//     console.info('Error while fetching file numbers based on referenceNo', error);
+//     throw error;
+//   }
+// }
 
-    dynamoData.Housebill.push(housebill);
+// async function preparePayload(fileNumber) {
+//   try {
+//     const shipmentHeaderParams = {
+//       TableName: process.env.SHIPMENT_HEADER_TABLE,
+//       KeyConditionExpression: 'PK_OrderNo = :PK_OrderNo',
+//       ExpressionAttributeValues: {
+//         ':PK_OrderNo': fileNumber,
+//       },
+//     };
+//     const shipmentHeaderResult = await getData(shipmentHeaderParams);
+//     const housebill = get(shipmentHeaderResult, '[0].Housebill', '');
 
-    const payload = `<?xml version="1.0"?>
-          <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-            <soap:Header>
-              <AuthHeader xmlns="http://tempuri.org/">
-                <UserName>saplbn</UserName>
-                <Password>saplbn</Password>
-              </AuthHeader>
-            </soap:Header>
-            <soap:Body>
-              <WriteTrackingNote xmlns="http://tempuri.org/">
-                <HandlingStation/>
-                <HouseBill>${housebill}</HouseBill>
-                <TrackingNotes>
-                  <TrackingNotes>
-                    <TrackingNoteMessage>technicalId ${get(dynamoData, 'TechnicalId', '')}</TrackingNoteMessage>
-                  </TrackingNotes>
-                </TrackingNotes>
-              </WriteTrackingNote>
-            </soap:Body>
-          </soap:Envelope>`;
-    return payload;
-  } catch (error) {
-    console.error(`Error while preparing payload for fileNumber: ${fileNumber}, Error: ${error}`);
-    throw error;
-  }
-}
+//     dynamoData.Housebill.push(housebill);
 
-async function sendToWT(postData) {
-  try {
-    const config = {
-      url: process.env.LOC_URL,
-      method: 'post',
-      headers: {
-        'Accept': 'text/xml',
-        'Content-Type': 'text/xml',
-      },
-      data: postData,
-    };
+//     const payload = `<?xml version="1.0"?>
+//           <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+//             <soap:Header>
+//               <AuthHeader xmlns="http://tempuri.org/">
+//                 <UserName>saplbn</UserName>
+//                 <Password>saplbn</Password>
+//               </AuthHeader>
+//             </soap:Header>
+//             <soap:Body>
+//               <WriteTrackingNote xmlns="http://tempuri.org/">
+//                 <HandlingStation/>
+//                 <HouseBill>${housebill}</HouseBill>
+//                 <TrackingNotes>
+//                   <TrackingNotes>
+//                     <TrackingNoteMessage>technicalId ${get(dynamoData, 'TechnicalId', '')}</TrackingNoteMessage>
+//                   </TrackingNotes>
+//                 </TrackingNotes>
+//               </WriteTrackingNote>
+//             </soap:Body>
+//           </soap:Envelope>`;
+//     return payload;
+//   } catch (error) {
+//     console.error(`Error while preparing payload for fileNumber: ${fileNumber}, Error: ${error}`);
+//     throw error;
+//   }
+// }
 
-    console.info('config: ', config);
-    const res = await axios.request(config);
-    console.info(get(res, 'data', ''));
-    if (get(res, 'status', '') === 200) {
-      return get(res, 'data', '');
-    }
-    dynamoData.XmlResponsePayload = get(res, 'data');
-    throw new Error(`World trak API Request Failed: ${res}`);
-  } catch (error) {
-    console.error(`World trak API Request Failed: ${error}`);
-    throw error;
-  }
-}
+// async function sendToWT(postData) {
+//   try {
+//     const config = {
+//       url: process.env.LOC_URL,
+//       method: 'post',
+//       headers: {
+//         'Accept': 'text/xml',
+//         'Content-Type': 'text/xml',
+//       },
+//       data: postData,
+//     };
+
+//     console.info('config: ', config);
+//     const res = await axios.request(config);
+//     console.info(get(res, 'data', ''));
+//     if (get(res, 'status', '') === 200) {
+//       return get(res, 'data', '');
+//     }
+//     dynamoData.XmlResponsePayload = get(res, 'data');
+//     throw new Error(`World trak API Request Failed: ${res}`);
+//   } catch (error) {
+//     console.error(`World trak API Request Failed: ${error}`);
+//     throw error;
+//   }
+// }
