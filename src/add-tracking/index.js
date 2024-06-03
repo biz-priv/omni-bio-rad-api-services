@@ -37,8 +37,8 @@ module.exports.handler = async (event, context) => {
       stops.map(async (stop) => {
         let locId;
         try {
-          locId = get(stop, 'location.Id', '').split(':')[6];
-          const query = `insert into tbl_references (FK_OrderNo,CustomerType,ReferenceNo,FK_RefTypeId) (select fk_orderno,customertype,'${get(stop, 'stopId', '')}','STO' from tbl_references where referenceno='${locId}' and customertype in ('S','C') and fk_reftypeid='STP' and fk_orderno in (select fk_orderno from tbl_references where customertype='B' and fk_reftypeid='SID' and referenceno='${get(dynamoData, 'FreightOrderId', '')}') and fk_orderno not in (select fk_orderno from tbl_references where customertype in ('S','C') and fk_reftypeid='STO'))`;
+          locId = get(get(stop, 'location.Id', '').split(':'), '[6]', '');
+          const query = `insert into tbl_references (FK_OrderNo,CustomerType,ReferenceNo,FK_RefTypeId) (select fk_orderno,customertype,'${get(stop, 'stopId', '')}','STO' from tbl_references where referenceno='${locId}' and customertype in ('S','C') and fk_reftypeid='STP' and fk_orderno in (select fk_orderno from tbl_references where customertype='B' and fk_reftypeid='SID' and referenceno='${get(dynamoData, 'FreightOrderId', '')}') and fk_orderno not in (select fk_orderno from tbl_references where referenceno='${get(stop, 'stopId', '')}' and customertype in ('S','C') and fk_reftypeid='STO'))`;
           console.info(query);
           await querySourceDb(query);
           return true;
@@ -112,7 +112,6 @@ module.exports.handler = async (event, context) => {
     };
   }
 };
-
 
 // async function getFileNumbers(referenceNo) {
 //   try {

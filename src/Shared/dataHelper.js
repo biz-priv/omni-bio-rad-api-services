@@ -567,7 +567,7 @@ async function fetchShipmentFile(orderNo) {
 async function modifyTime(dateTime) {
   try {
     const dateTimeUTC = moment.tz(dateTime, 'UTC');
-    const weekNumber = dateTimeUTC.isoWeek();
+    const weekNumber = moment.tz(dateTimeUTC, 'UTC').week();
     let hoursToAdd;
     if (weekNumber >= 11 && weekNumber <= 44) {
       hoursToAdd = 5;
