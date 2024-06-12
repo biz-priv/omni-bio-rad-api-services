@@ -33,139 +33,156 @@ module.exports.handler = async (event, context) => {
         const dynamoData = {};
         let fileNumber;
         console.info('record: ', record);
-        try{
-        const cstDate = moment().tz('America/Chicago');
-        dynamoData.CSTDate = cstDate.format('YYYY-MM-DD');
-        dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
-        dynamoData.Event = record;
-        dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
-        dynamoData.Process = 'SEND_ORDER_EVENTS';
+        try {
+          const cstDate = moment().tz('America/Chicago');
+          dynamoData.CSTDate = cstDate.format('YYYY-MM-DD');
+          dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
+          dynamoData.Event = record;
+          dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
+          dynamoData.Process = 'SEND_ORDER_EVENTS';
 
-        const recordBody = JSON.parse(get(record, 'body', {}));
-        console.info('recordBody: ', recordBody);
-        console.info(recordBody.Message);
-        const message = JSON.parse(get(recordBody, 'Message', ''));
-        console.info(message);
-        const oldImage = get(message, 'OldImage', '');
-        let housebill;
-        let location;
-        let data;
-        if (oldImage !== '') {
-          console.info('Skipped as this is an update or delete shipment.');
-          return;
-        }
-        if (
-          get(message, 'dynamoTableName', '') === `omni-wt-rt-apar-failure-${process.env.STAGE}` ||
-          get(message, 'dynamoTableName', '') ===
-            `omni-wt-rt-shipment-milestone-${process.env.STAGE}` ||
-          get(message, 'dynamoTableName', '') === `omni-wt-rt-shipment-file-${process.env.STAGE}`
-        ) {
+          const recordBody = JSON.parse(get(record, 'body', {}));
+          console.info('recordBody: ', recordBody);
+          console.info(recordBody.Message);
+          const message = JSON.parse(get(recordBody, 'Message', ''));
           console.info(message);
-          data = AWS.DynamoDB.Converter.unmarshall(get(message, 'NewImage', {}));
-          fileNumber = get(data, 'FK_OrderNo', '');
-          const headerParams = {
-            TableName: process.env.SHIPMENT_HEADER_TABLE,
-            KeyConditionExpression: 'PK_OrderNo = :PK_OrderNo',
-            ExpressionAttributeValues: {
-              ':PK_OrderNo': fileNumber,
-            },
-          };
-          const res = await getData(headerParams);
-          if (!bioRadCustomerIds.includes(get(res, '[0].BillNo'))) {
-            console.info('This event is not related to bio rad. So, skipping the process.');
+          const oldImage = get(message, 'OldImage', '');
+          let housebill;
+          let location;
+          let data;
+          if (oldImage !== '') {
+            console.info('Skipped as this is an update or delete shipment.');
             return;
           }
-          housebill = get(res, '[0].Housebill');
-
+          const referenceData = await fetchRefernceNo(fileNumber);
           if (
-            get(message, 'dynamoTableName', '') === `omni-wt-rt-apar-failure-${process.env.STAGE}`
-          ) {
-            eventType = 'exceptions';
-            orderStatus = get(data, 'FDCode', '');
-          } else if (
+            get(message, 'dynamoTableName', '') ===
+              `omni-wt-rt-apar-failure-${process.env.STAGE}` ||
+            get(message, 'dynamoTableName', '') ===
+              `omni-wt-rt-shipment-milestone-${process.env.STAGE}` ||
             get(message, 'dynamoTableName', '') === `omni-wt-rt-shipment-file-${process.env.STAGE}`
           ) {
-            eventType = 'documents';
-            orderStatus = get(data, 'FK_DocType', '');
+            console.info(message);
+            data = AWS.DynamoDB.Converter.unmarshall(get(message, 'NewImage', {}));
+            fileNumber = get(data, 'FK_OrderNo', '');
+            const headerParams = {
+              TableName: process.env.SHIPMENT_HEADER_TABLE,
+              KeyConditionExpression: 'PK_OrderNo = :PK_OrderNo',
+              ExpressionAttributeValues: {
+                ':PK_OrderNo': fileNumber,
+              },
+            };
+            const res = await getData(headerParams);
+            if (!bioRadCustomerIds.includes(get(res, '[0].BillNo'))) {
+              console.info('This event is not related to bio rad. So, skipping the process.');
+              return;
+            }
+
+            housebill = get(res, '[0].Housebill');
+
+            if (
+              get(message, 'dynamoTableName', '') === `omni-wt-rt-apar-failure-${process.env.STAGE}`
+            ) {
+              eventType = 'exceptions';
+              orderStatus = get(data, 'FDCode', '');
+            } else if (
+              get(message, 'dynamoTableName', '') ===
+              `omni-wt-rt-shipment-file-${process.env.STAGE}`
+            ) {
+              if (get(data, 'CustomerAccess', '') !== 'Y') {
+                console.info(
+                  'This document event customer access is not Y, so skipping the process.'
+                );
+                return;
+              }
+              eventType = 'documents';
+              orderStatus = get(data, 'FK_DocType', '');
+            } else {
+              eventType = 'milestones';
+              orderStatus = get(data, 'FK_OrderStatusId', '');
+            }
+
+            console.info(data);
+          } else if (
+            get(message, 'eventSourceARN', '').split('/')[1] ===
+            `omni-p44-shipment-location-updates-${process.env.STAGE}`
+          ) {
+            eventType = 'geolocation';
+
+            data = AWS.DynamoDB.Converter.unmarshall(
+              get(message, 'dynamodb.NewImage', {}),
+              eventType
+            );
+            housebill = get(data, 'HouseBillNo');
+            console.info(data);
+            const headerParams = {
+              TableName: process.env.SHIPMENT_HEADER_TABLE,
+              IndexName: 'Housebill-index',
+              KeyConditionExpression: 'Housebill = :Housebill',
+              ExpressionAttributeValues: {
+                ':Housebill': get(data, 'HouseBillNo'),
+              },
+            };
+            const res = await getData(headerParams);
+            console.info(res);
+            fileNumber = get(res, '[0].PK_OrderNo');
+            location = {
+              latitude: get(data, 'latitude'),
+              longitute: get(data, 'longitude'),
+            };
+            console.info(location);
           } else {
-            eventType = 'milestones';
-            orderStatus = get(data, 'FK_OrderStatusId', '');
+            console.info('skipper the events as not matching the requirement');
           }
 
-          console.info(data);
-        } else if (
-          get(message, 'eventSourceARN', '').split('/')[1] ===
-          `omni-p44-shipment-location-updates-${process.env.STAGE}`
-        ) {
-          eventType = 'geolocation';
-
-          data = AWS.DynamoDB.Converter.unmarshall(
-            get(message, 'dynamodb.NewImage', {}),
-            eventType
+          console.info(fileNumber, housebill, eventType);
+          const payload = await getPayloadData(
+            fileNumber,
+            housebill,
+            location,
+            data,
+            dynamoData,
+            referenceData
           );
-          housebill = get(data, 'HouseBillNo');
-          console.info(data);
-          const headerParams = {
-            TableName: process.env.SHIPMENT_HEADER_TABLE,
-            IndexName: 'Housebill-index',
-            KeyConditionExpression: 'Housebill = :Housebill',
-            ExpressionAttributeValues: {
-              ':Housebill': get(data, 'HouseBillNo'),
-            },
-          };
-          const res = await getData(headerParams);
-          console.info(res);
-          fileNumber = get(res, '[0].PK_OrderNo');
-          location = {
-            latitude: get(data, 'latitude'),
-            longitute: get(data, 'longitude'),
-          };
-          console.info(location);
-        } else {
-          console.info('skipper the events as not matching the requirement');
-        }
+          console.info(JSON.stringify(payload));
 
-        console.info(fileNumber, housebill, eventType);
-        const payload = await getPayloadData(fileNumber, housebill, location, data, dynamoData);
-        console.info(JSON.stringify(payload));
-
-        if (get(payload, 'events[0].stopId', '') === '') {
-          console.info('stopId is not yet populated');
-          return;
-        }
-        // dynamoData.Payload = JSON.stringify(payload);
-        // const token = await getLbnToken();
-        // dynamoData.Payload = await sendOrderEventsLbn(token, payload);
-        // await putLogItem(dynamoData);
-      }catch(error){
-        console.error('Error for orderNo: ', fileNumber);
-
-        let errorMsgVal = '';
-        if (get(error, 'message', null) !== null) {
-          errorMsgVal = get(error, 'message', '');
-        } else {
-          errorMsgVal = error;
-        }
-        const flag = errorMsgVal.split(',')[0];
-        if (flag !== 'Error') {
-          const params = {
-            Message: `An error occurred in function ${context.functionName}.\n\nERROR DETAILS: ${error}.\n\nId: ${get(dynamoData, 'Id', '')}.\n\nEVENT: ${JSON.stringify(event)}.\n\nNote: Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.`,
-            Subject: `Bio Rad Update Shipment ERROR ${context.functionName}`,
-            TopicArn: process.env.NOTIFICATION_ARN,
-          };
-          try {
-            await sns.publish(params).promise();
-            console.info('SNS notification has sent');
-          } catch (err) {
-            console.error('Error while sending sns notification: ', err);
+          if (get(payload, 'events[0].stopId', '') === '' || get(payload, 'orderId', '') === '') {
+            console.info('stopId or orderId(freightOrderId) is not yet populated');
+            return;
           }
-        } else {
-          errorMsgVal = errorMsgVal.split(',').slice(1);
+          // dynamoData.Payload = JSON.stringify(payload);
+          // const token = await getLbnToken();
+          // dynamoData.Payload = await sendOrderEventsLbn(token, payload);
+          // await putLogItem(dynamoData);
+        } catch (error) {
+          console.error('Error for orderNo: ', fileNumber);
+
+          let errorMsgVal = '';
+          if (get(error, 'message', null) !== null) {
+            errorMsgVal = get(error, 'message', '');
+          } else {
+            errorMsgVal = error;
+          }
+          const flag = errorMsgVal.split(',')[0];
+          if (flag !== 'Error') {
+            const params = {
+              Message: `An error occurred in function ${context.functionName}.\n\nERROR DETAILS: ${error}.\n\nId: ${get(dynamoData, 'Id', '')}.\n\nEVENT: ${JSON.stringify(event)}.\n\nNote: Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.`,
+              Subject: `Bio Rad Update Shipment ERROR ${context.functionName}`,
+              TopicArn: process.env.NOTIFICATION_ARN,
+            };
+            try {
+              await sns.publish(params).promise();
+              console.info('SNS notification has sent');
+            } catch (err) {
+              console.error('Error while sending sns notification: ', err);
+            }
+          } else {
+            errorMsgVal = errorMsgVal.split(',').slice(1);
+          }
+          dynamoData.ErrorMsg = errorMsgVal;
+          dynamoData.Status = 'FAILED';
+          await putLogItem(dynamoData);
         }
-        dynamoData.ErrorMsg = errorMsgVal;
-        dynamoData.Status = 'FAILED';
-        await putLogItem(dynamoData);
-      }
       })
     );
 
@@ -194,11 +211,10 @@ module.exports.handler = async (event, context) => {
   }
 };
 
-async function getPayloadData(orderNo, housebill, location, data, dynamoData) {
+async function getPayloadData(orderNo, housebill, location, data, dynamoData, referenceData) {
   try {
     console.info(orderNo);
     const trackingData = await fetchTackingData(orderNo);
-    const referenceData = await fetchRefernceNo(orderNo);
     const orderId = get(
       referenceData.find(
         (obj) => get(obj, 'CustomerType') === 'B' && get(obj, 'FK_RefTypeId') === 'SID'
@@ -297,9 +313,9 @@ async function getPayloadData(orderNo, housebill, location, data, dynamoData) {
         },
       ];
     } else {
-      console.info('status: ', get(data, 'FK_OrderStatusId', ''));
+      console.info('status: ', get(data, 'FK_DocType', ''));
 
-      const docType = get(CONSTANTS, `docType.${get(data, 'FK_OrderStatusId', '').toUpperCase()}`);
+      const docType = get(CONSTANTS, `docType.${get(data, 'FK_DocType', '').toUpperCase()}`);
       console.info('doctype: ', docType);
       const docData = await getDocsFromWebsli({ housebill, doctype: `doctype=${docType}` });
 
@@ -328,16 +344,16 @@ async function getPayloadData(orderNo, housebill, location, data, dynamoData) {
       ];
       console.info(docData);
       if (docData.length > 0) {
-        const fileName = get(docData, '[0].filename', '')
+        const fileName = get(docData, '[0].filename', '');
         let mimeType;
-        if(fileName.includes('.pdf')){
-          mimeType = 'application/pdf'
-        } else if(fileName.includes('.jpg')){
-          mimeType = 'image/jpg'
-        } else if(fileName.includes('.jpeg')){
-          mimeType = 'image/jpeg'
-        } else if(fileName.includes('.png')){
-          mimeType = 'image/png'
+        if (fileName.includes('.pdf')) {
+          mimeType = 'application/pdf';
+        } else if (fileName.includes('.jpg')) {
+          mimeType = 'image/jpg';
+        } else if (fileName.includes('.jpeg')) {
+          mimeType = 'image/jpeg';
+        } else if (fileName.includes('.png')) {
+          mimeType = 'image/png';
         }
 
         events[0].attachments.push({

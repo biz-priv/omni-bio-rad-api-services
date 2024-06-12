@@ -13,7 +13,7 @@ function:
       - src/Shared/**
   events:
     - sqs:
-        arn: ${ssm:/omni/${self:provider.stage}/bio-rad/send-billing-invoice/sqs.arn} 
+        arn: ${ssm:/omni/${self:provider.stage}/bio-rad/send-billing-invoice/sqs.arn}
         batchSize: 10
   environment:
     LBN_TOKEN_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint}
