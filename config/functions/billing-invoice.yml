@@ -1,0 +1,25 @@
+---
+function:
+  name: omni-bio-rad-billing-invoice-${self:provider.stage}
+  handler: src/billing-invoice/index.handler
+  runtime: nodejs20.x
+  timeout: 900
+  layers:
+    - { Ref: NodeModulesLambdaLayer }
+  package:
+    patterns:
+      - '!**/*'
+      - src/billing-invoice/**
+      - src/Shared/**
+  events:
+    - sqs:
+        arn: ${ssm:/omni/${self:provider.stage}/bio-rad/send-billing-invoice/sqs.arn} 
+        batchSize: 10
+  environment:
+    LBN_TOKEN_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint}
+    LBN_TOKEN_USERNAME: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/username}
+    LBN_TOKEN_PASSWORD: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/password}
+    LBN_TOKEN_AUTHORIZATION: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/authorization}
+    BIO_RAD_BILL_TO_NUMBERS: ${ssm:/omni/${self:provider.stage}/bio-rad/bill-to/numbers}
+    GET_DOCUMENT_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/wt/get-document/api.url}
+    LBN_BILLING_INVOICE_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-send-billing-invoice-endpoint}

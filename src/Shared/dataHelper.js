@@ -6,6 +6,7 @@ const axios = require('axios');
 const moment = require('moment-timezone');
 const xmlJs = require('xml-js');
 const { getData } = require('./dynamo');
+const { CONSTANTS } = require('./constants');
 
 async function xmlJsonConverter(xmlData) {
   try {
@@ -68,47 +69,6 @@ async function sendToWT(postData) {
     throw new Error(`WORLD TRAK API Request Failed: ${error}`);
   }
 }
-
-const CONSTANTS = {
-  mode: { 17: 'Domestic', 18: 'Truckload' },
-  timeAway: {
-    MST: -1,
-    MDT: -2,
-    HST: -5,
-    HDT: -5,
-    CST: 0,
-    CDT: 0,
-    AST: -3,
-    ADT: -3,
-    EST: 1,
-    EDT: 1,
-    PST: -2,
-    PDT: -2,
-  },
-  station: {
-    CA: 'T09',
-    US: 'T06',
-  },
-  billNo: {
-    CA: '8061',
-    US: '8062',
-  },
-  grossWeight: {
-    LBR: 'lb',
-  },
-  DimUOMV3: {
-    INH: 'in',
-    CMT: 'cm',
-  },
-  serviceLevel: [
-    { min: 0, max: 24, value: 'ND' },
-    { min: 24, max: 48, value: '2D' },
-    { min: 28, max: 60, value: '3A' },
-    { min: 60, max: 72, value: '3D' },
-    { min: 72, max: 96, value: '4D' },
-    { min: 96, max: 120, value: 'EC' },
-  ],
-};
 
 async function prepareHeaderData(eventBody) {
   const headerData = {
@@ -601,11 +561,38 @@ async function getOffset(dateTime) {
   }
 }
 
+async function getShipmentData(orderId) {
+  try {
+    const Params = {
+      TableName: process.env.LOGS_TABLE,
+      IndexName: 'FreightOrderId-Index',
+      KeyConditionExpression: 'FreightOrderId = :FreightOrderId',
+      FilterExpression: '#status = :status AND #process = :process',
+      ExpressionAttributeNames: {
+        '#status': 'Status',
+        '#process': 'Process',
+      },
+      ExpressionAttributeValues: {
+        ':FreightOrderId': orderId,
+        ':status': 'SUCCESS',
+        ':process': 'CREATE',
+      },
+    };
+
+    // console.info(Params);
+    const Result = await getData(Params);
+    // console.info('bio rad data: ', Result);
+    return Result;
+  } catch (error) {
+    console.info('error while reading shipment data from logs table: ', orderId);
+    throw error;
+  }
+}
+
 module.exports = {
   xmlJsonConverter,
   querySourceDb,
   sendToWT,
-  CONSTANTS,
   prepareHeaderData,
   prepareShipperAndConsigneeData,
   prepareReferenceList,
@@ -623,4 +610,5 @@ module.exports = {
   fetchShipmentFile,
   modifyTime,
   getOffset,
+  getShipmentData,
 };

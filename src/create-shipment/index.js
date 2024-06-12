@@ -17,8 +17,8 @@ const {
   prepareWTPayload,
   groupItems,
   getServiceLevel,
-  CONSTANTS,
 } = require('../Shared/dataHelper');
+const { CONSTANTS } = require('../Shared/constants');
 
 const sns = new AWS.SNS();
 const dynamoData = {};

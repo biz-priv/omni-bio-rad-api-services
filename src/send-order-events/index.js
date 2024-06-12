@@ -14,13 +14,16 @@ const {
   modifyTime,
   getOffset,
   getLbnToken,
+  getShipmentData,
 } = require('../Shared/dataHelper');
+const { CONSTANTS } = require('../Shared/constants');
 
+const sns = new AWS.SNS();
 const bioRadCustomerIds = process.env.BIO_RAD_BILL_TO_NUMBERS.split(',');
 let eventType;
 let orderStatus;
 
-module.exports.handler = async (event) => {
+module.exports.handler = async (event, context) => {
   try {
     console.info(event);
     // const record = get(event, 'Records[2]', {});
@@ -28,8 +31,9 @@ module.exports.handler = async (event) => {
     await Promise.all(
       get(event, 'Records', []).map(async (record) => {
         const dynamoData = {};
+        let fileNumber;
         console.info('record: ', record);
-
+        try{
         const cstDate = moment().tz('America/Chicago');
         dynamoData.CSTDate = cstDate.format('YYYY-MM-DD');
         dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
@@ -43,7 +47,6 @@ module.exports.handler = async (event) => {
         const message = JSON.parse(get(recordBody, 'Message', ''));
         console.info(message);
         const oldImage = get(message, 'OldImage', '');
-        let fileNumber;
         let housebill;
         let location;
         let data;
@@ -54,7 +57,8 @@ module.exports.handler = async (event) => {
         if (
           get(message, 'dynamoTableName', '') === `omni-wt-rt-apar-failure-${process.env.STAGE}` ||
           get(message, 'dynamoTableName', '') ===
-            `omni-wt-rt-shipment-milestone-${process.env.STAGE}`
+            `omni-wt-rt-shipment-milestone-${process.env.STAGE}` ||
+          get(message, 'dynamoTableName', '') === `omni-wt-rt-shipment-file-${process.env.STAGE}`
         ) {
           console.info(message);
           data = AWS.DynamoDB.Converter.unmarshall(get(message, 'NewImage', {}));
@@ -78,9 +82,11 @@ module.exports.handler = async (event) => {
           ) {
             eventType = 'exceptions';
             orderStatus = get(data, 'FDCode', '');
-          } else if (['HAWB', 'HCPOD', 'POD'].includes(get(data, 'FK_OrderStatusId', ''))) {
+          } else if (
+            get(message, 'dynamoTableName', '') === `omni-wt-rt-shipment-file-${process.env.STAGE}`
+          ) {
             eventType = 'documents';
-            orderStatus = get(data, 'FK_OrderStatusId', '');
+            orderStatus = get(data, 'FK_DocType', '');
           } else {
             eventType = 'milestones';
             orderStatus = get(data, 'FK_OrderStatusId', '');
@@ -127,10 +133,39 @@ module.exports.handler = async (event) => {
           console.info('stopId is not yet populated');
           return;
         }
-        dynamoData.Payload = JSON.stringify(payload);
-        const token = await getLbnToken();
-        dynamoData.Payload = await sendOrderEventsLbn(token, payload);
+        // dynamoData.Payload = JSON.stringify(payload);
+        // const token = await getLbnToken();
+        // dynamoData.Payload = await sendOrderEventsLbn(token, payload);
+        // await putLogItem(dynamoData);
+      }catch(error){
+        console.error('Error for orderNo: ', fileNumber);
+
+        let errorMsgVal = '';
+        if (get(error, 'message', null) !== null) {
+          errorMsgVal = get(error, 'message', '');
+        } else {
+          errorMsgVal = error;
+        }
+        const flag = errorMsgVal.split(',')[0];
+        if (flag !== 'Error') {
+          const params = {
+            Message: `An error occurred in function ${context.functionName}.\n\nERROR DETAILS: ${error}.\n\nId: ${get(dynamoData, 'Id', '')}.\n\nEVENT: ${JSON.stringify(event)}.\n\nNote: Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.`,
+            Subject: `Bio Rad Update Shipment ERROR ${context.functionName}`,
+            TopicArn: process.env.NOTIFICATION_ARN,
+          };
+          try {
+            await sns.publish(params).promise();
+            console.info('SNS notification has sent');
+          } catch (err) {
+            console.error('Error while sending sns notification: ', err);
+          }
+        } else {
+          errorMsgVal = errorMsgVal.split(',').slice(1);
+        }
+        dynamoData.ErrorMsg = errorMsgVal;
+        dynamoData.Status = 'FAILED';
         await putLogItem(dynamoData);
+      }
       })
     );
 
@@ -264,7 +299,7 @@ async function getPayloadData(orderNo, housebill, location, data, dynamoData) {
     } else {
       console.info('status: ', get(data, 'FK_OrderStatusId', ''));
 
-      const docType = get(CONSTANTS, `docType.${get(data, 'FK_OrderStatusId', '')}`);
+      const docType = get(CONSTANTS, `docType.${get(data, 'FK_OrderStatusId', '').toUpperCase()}`);
       console.info('doctype: ', docType);
       const docData = await getDocsFromWebsli({ housebill, doctype: `doctype=${docType}` });
 
@@ -277,7 +312,7 @@ async function getPayloadData(orderNo, housebill, location, data, dynamoData) {
         stopId = 'clocid';
       }
       console.info(
-        'eventtype: ',
+        'eventtype, orderStatus,  ',
         eventType,
         orderStatus,
         get(CONSTANTS, `${eventType}.${orderStatus}`, '')
@@ -293,41 +328,35 @@ async function getPayloadData(orderNo, housebill, location, data, dynamoData) {
       ];
       console.info(docData);
       if (docData.length > 0) {
+        const fileName = get(docData, '[0].filename', '')
+        let mimeType;
+        if(fileName.includes('.pdf')){
+          mimeType = 'application/pdf'
+        } else if(fileName.includes('.jpg')){
+          mimeType = 'image/jpg'
+        } else if(fileName.includes('.jpeg')){
+          mimeType = 'image/jpeg'
+        } else if(fileName.includes('.png')){
+          mimeType = 'image/png'
+        }
+
         events[0].attachments.push({
-          fileName: get(docData, 'filename', ''),
-          mimeType: 'application/pdf',
+          fileName,
+          mimeType,
           fileContentBinaryObject: get(docData, '[0].b64str', ''),
         });
       }
     }
 
-    const Params = {
-      TableName: process.env.LOGS_TABLE,
-      IndexName: 'FreightOrderId-Index',
-      KeyConditionExpression: 'FreightOrderId = :FreightOrderId',
-      FilterExpression: '#status = :status AND #process = :process',
-      ExpressionAttributeNames: {
-        '#status': 'Status',
-        '#process': 'Process',
-      },
-      ExpressionAttributeValues: {
-        ':FreightOrderId': orderId,
-        ':status': 'SUCCESS',
-        ':process': 'CREATE',
-      },
-    };
-
-    // console.info(Params);
-    const Result = await getData(Params);
-    // console.info('bio rad data: ', Result);
+    const shipmentData = await getShipmentData(orderId);
 
     dynamoData.FreightOrderId = orderId;
     return {
       shipper: {
-        shipperLBNID: get(Result, '[0].OrderingPartyLbnId', ''),
+        shipperLBNID: get(shipmentData, '[0].OrderingPartyLbnId', ''),
       },
       carrier: {
-        carrierLBNID: get(Result, '[0].CarrierPartyLbnId', ''),
+        carrierLBNID: get(shipmentData, '[0].CarrierPartyLbnId', ''),
       },
       technicalId: get(trackingData, 'Note', ''),
       orderId,
@@ -340,98 +369,6 @@ async function getPayloadData(orderNo, housebill, location, data, dynamoData) {
     throw error;
   }
 }
-
-const CONSTANTS = {
-  milestones: [
-    {
-      statusType: ['PUP', 'TTC'],
-      eventType: 'DEPARTURE',
-      stopId: 'slocid',
-    },
-    {
-      statusType: ['DEL'],
-      eventType: 'ARRIV_DEST',
-      stopId: 'clocid',
-    },
-    {
-      statusType: ['HAWB'],
-      eventType: 'POPU',
-      stopId: 'slocid',
-    },
-    {
-      statusType: ['HCPOD', 'POD'],
-      eventType: 'POD',
-      stopId: 'clocid',
-    },
-    {
-      statusType: ['SRS'],
-      eventType: 'RETURN',
-      stopId: 'slocid',
-    },
-    {
-      statusType: ['OFD'],
-      eventType: 'OUT_FOR_DELIVERY',
-      stopId: 'clocid',
-    },
-  ],
-  exceptions: [
-    {
-      statusType: ['APP', 'DLE', 'SHORT', 'REFU', 'LAD', 'CON'],
-      eventType: 'DELIVERY_MISSED',
-      stopId: 'clocid',
-    },
-    {
-      statusType: ['FTUSP', 'INMIL', 'BADDA', 'FAOUT', 'NTDT', 'OMNII'],
-      eventType: 'TRACKING_ERROR',
-      stopId: 'clocid',
-    },
-    {
-      statusType: ['MTT', 'HUB'],
-      eventType: 'MISSED_CONNECTION',
-      stopId: 'clocid',
-    },
-    {
-      statusType: ['SOS'],
-      eventType: 'FORCEOFNATURE',
-      stopId: 'clocid',
-    },
-    {
-      statusType: ['COS'],
-      eventType: 'PACKAGINDAMAGED',
-      stopId: 'slocid',
-    },
-    {
-      statusType: ['CUP', 'PUE', 'LATEB', 'MISCU', 'SHI'],
-      eventType: 'PICKUP_MISSED',
-      stopId: 'slocid',
-    },
-    {
-      statusType: ['DAM'],
-      eventType: 'DAMAGED',
-      stopId: 'slocid',
-    },
-    {
-      statusType: ['LPU', 'DEL'],
-      eventType: 'LATE_DEPARTURE',
-      stopId: 'slocid',
-    },
-  ],
-  geolocation: {
-    HAWB: 'POPU',
-    HCPOD: 'POD',
-    POD: 'POD',
-  },
-  documents: {
-    HAWB: 'POPU',
-    HCPOD: 'POD',
-    POD: 'POD',
-  },
-  docType: {
-    HAWB: 'HAWB',
-    HCPOD: 'HCPOD',
-    POD: 'HCPOD',
-  },
-};
 
 async function sendOrderEventsLbn(token, payload) {
   try {
