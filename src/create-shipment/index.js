@@ -185,7 +185,6 @@ module.exports.handler = async (event, context) => {
           dateValues,
           serviceLevel
         );
-        console.info(payloads);
         return { ...payloads, stopId: key };
       })
     );

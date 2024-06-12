@@ -61,6 +61,7 @@ async function sendToWT(postData) {
     console.info('config: ', config);
     const res = await axios.request(config);
     if (get(res, 'status', '') === 200) {
+      console.info('WT result: ', res)
       return get(res, 'data', '');
     }
     throw new Error(`WORLD TRAK API Request Failed: ${res}`);
@@ -507,23 +508,6 @@ async function fetchRefernceNo(orderNo) {
   }
 }
 
-async function fetchShipmentFile(orderNo) {
-  try {
-    const params = {
-      TableName: 'omni-wt-rt-shipment-file-dev',
-      KeyConditionExpression: 'FK_OrderNo = :FK_OrderNo',
-      ExpressionAttributeValues: {
-        ':FK_OrderNo': orderNo,
-      },
-    };
-    const res = await getData(params);
-    return res;
-  } catch (error) {
-    console.info('Error while fetching shipment file: ', error);
-    throw error;
-  }
-}
-
 async function modifyTime(dateTime) {
   try {
     const dateTimeUTC = moment.tz(dateTime, 'UTC');
@@ -607,7 +591,6 @@ module.exports = {
   cancelShipmentApiCall,
   fetchTackingData,
   fetchRefernceNo,
-  fetchShipmentFile,
   modifyTime,
   getOffset,
   getShipmentData,

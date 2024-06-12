@@ -10,7 +10,6 @@ const {
   fetchTackingData,
   fetchRefernceNo,
   getDocsFromWebsli,
-  fetchShipmentFile,
   modifyTime,
   getOffset,
   getLbnToken,
@@ -43,18 +42,16 @@ module.exports.handler = async (event, context) => {
 
           const recordBody = JSON.parse(get(record, 'body', {}));
           console.info('recordBody: ', recordBody);
-          console.info(recordBody.Message);
           const message = JSON.parse(get(recordBody, 'Message', ''));
           console.info(message);
-          const oldImage = get(message, 'OldImage', '');
+          // const oldImage = get(message, 'OldImage', '');
           let housebill;
           let location;
           let data;
-          if (oldImage !== '') {
-            console.info('Skipped as this is an update or delete shipment.');
-            return;
-          }
-          const referenceData = await fetchRefernceNo(fileNumber);
+          // if (oldImage !== '') {
+          //   console.info('Skipped as this is an update or delete shipment.');
+          //   return;
+          // }
           if (
             get(message, 'dynamoTableName', '') ===
               `omni-wt-rt-apar-failure-${process.env.STAGE}` ||
@@ -134,6 +131,19 @@ module.exports.handler = async (event, context) => {
           } else {
             console.info('skipper the events as not matching the requirement');
           }
+          const referenceData = await fetchRefernceNo(fileNumber);
+
+          const orderId = get(
+            referenceData.find(
+              (obj) => get(obj, 'CustomerType') === 'B' && get(obj, 'FK_RefTypeId') === 'SID'
+            ),
+            'ReferenceNo',
+            ''
+          );
+          if(orderId === ''){
+            console.info('There is no frieght order Id for this shipment.so skipping the process.');
+            return
+          }
 
           console.info(fileNumber, housebill, eventType);
           const payload = await getPayloadData(
@@ -142,7 +152,8 @@ module.exports.handler = async (event, context) => {
             location,
             data,
             dynamoData,
-            referenceData
+            referenceData,
+            orderId
           );
           console.info(JSON.stringify(payload));
 
@@ -150,10 +161,10 @@ module.exports.handler = async (event, context) => {
             console.info('stopId or orderId(freightOrderId) is not yet populated');
             return;
           }
-          // dynamoData.Payload = JSON.stringify(payload);
-          // const token = await getLbnToken();
-          // dynamoData.Payload = await sendOrderEventsLbn(token, payload);
-          // await putLogItem(dynamoData);
+          dynamoData.Payload = JSON.stringify(payload);
+          const token = await getLbnToken();
+          dynamoData.Payload = await sendOrderEventsLbn(token, payload);
+          await putLogItem(dynamoData);
         } catch (error) {
           console.error('Error for orderNo: ', fileNumber);
 
@@ -211,17 +222,11 @@ module.exports.handler = async (event, context) => {
   }
 };
 
-async function getPayloadData(orderNo, housebill, location, data, dynamoData, referenceData) {
+async function getPayloadData(orderNo, housebill, location, data, dynamoData, referenceData, orderId) {
   try {
     console.info(orderNo);
     const trackingData = await fetchTackingData(orderNo);
-    const orderId = get(
-      referenceData.find(
-        (obj) => get(obj, 'CustomerType') === 'B' && get(obj, 'FK_RefTypeId') === 'SID'
-      ),
-      'ReferenceNo',
-      ''
-    );
+    
     const slocid = get(
       referenceData.find(
         (obj) => get(obj, 'CustomerType') === 'S' && get(obj, 'FK_RefTypeId') === 'STO'
@@ -319,8 +324,7 @@ async function getPayloadData(orderNo, housebill, location, data, dynamoData, re
       console.info('doctype: ', docType);
       const docData = await getDocsFromWebsli({ housebill, doctype: `doctype=${docType}` });
 
-      const shipmentFileData = await fetchShipmentFile(orderNo);
-      creationDateTimeUTC = await modifyTime(get(shipmentFileData, '[0].UploadDateTime', ''));
+      creationDateTimeUTC = await modifyTime(get(data, 'UploadDateTime', ''));
       let stopId;
       if (get(CONSTANTS, `${eventType}.${orderStatus}`, '') === 'POPU') {
         stopId = 'slocid';

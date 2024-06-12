@@ -1,15 +1,19 @@
 ---
 function:
-  name: omni-bio-rad-billing-invoice-${self:provider.stage}
-  handler: src/billing-invoice/index.handler
+  name: omni-bio-rad-send-billing-invoice-${self:provider.stage}
+  handler: src/send-billing-invoice/index.handler
   runtime: nodejs20.x
   timeout: 900
+  tags:
+    Name: billing invoice
+    Environment: ${opt:stage, 'dev'}
+    Application: bio rad
   layers:
     - { Ref: NodeModulesLambdaLayer }
   package:
     patterns:
       - '!**/*'
-      - src/billing-invoice/**
+      - src/send-billing-invoice/**
       - src/Shared/**
   events:
     - sqs:

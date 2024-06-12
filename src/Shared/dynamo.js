@@ -10,7 +10,7 @@ async function getData(params) {
     const data = await ddb.query(params).promise();
     return get(data, 'Items', []);
   } catch (err) {
-    console.info('getStationId:', err);
+    console.info('getData:', err);
     throw err;
   }
 }
