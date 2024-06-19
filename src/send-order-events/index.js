@@ -29,6 +29,8 @@ module.exports.handler = async (event, context) => {
 
     await Promise.all(
       get(event, 'Records', []).map(async (record) => {
+        orderStatus = ''
+        eventType = ''
         const dynamoData = {};
         let fileNumber;
         console.info('record: ', record);
@@ -41,25 +43,17 @@ module.exports.handler = async (event, context) => {
           dynamoData.Process = 'SEND_ORDER_EVENTS';
 
           const recordBody = JSON.parse(get(record, 'body', {}));
-          console.info('recordBody: ', recordBody);
           const message = JSON.parse(get(recordBody, 'Message', ''));
-          console.info(message);
-          // const oldImage = get(message, 'OldImage', '');
+          console.info('message body: ', message);
           let housebill;
           let location;
           let data;
-          // if (oldImage !== '') {
-          //   console.info('Skipped as this is an update or delete shipment.');
-          //   return;
-          // }
+          const dynamoTableName = get(message, 'dynamoTableName', '');
           if (
-            get(message, 'dynamoTableName', '') ===
-              `omni-wt-rt-apar-failure-${process.env.STAGE}` ||
-            get(message, 'dynamoTableName', '') ===
-              `omni-wt-rt-shipment-milestone-${process.env.STAGE}` ||
-            get(message, 'dynamoTableName', '') === `omni-wt-rt-shipment-file-${process.env.STAGE}`
+            dynamoTableName === `omni-wt-rt-apar-failure-${process.env.STAGE}` ||
+            dynamoTableName === `omni-wt-rt-shipment-milestone-${process.env.STAGE}` ||
+            dynamoTableName === `omni-wt-rt-shipment-file-${process.env.STAGE}`
           ) {
-            console.info(message);
             data = AWS.DynamoDB.Converter.unmarshall(get(message, 'NewImage', {}));
             fileNumber = get(data, 'FK_OrderNo', '');
             const headerParams = {
@@ -71,26 +65,19 @@ module.exports.handler = async (event, context) => {
             };
             const res = await getData(headerParams);
             if (!bioRadCustomerIds.includes(get(res, '[0].BillNo'))) {
-              console.info('This event is not related to bio rad. So, skipping the process.');
-              return;
+              console.info('SKIPPING, This event is not related to bio rad.');
+              throw new Error('SKIPPING, This event is not related to bio rad');
             }
 
             housebill = get(res, '[0].Housebill');
 
-            if (
-              get(message, 'dynamoTableName', '') === `omni-wt-rt-apar-failure-${process.env.STAGE}`
-            ) {
+            if (dynamoTableName === `omni-wt-rt-apar-failure-${process.env.STAGE}`) {
               eventType = 'exceptions';
               orderStatus = get(data, 'FDCode', '');
-            } else if (
-              get(message, 'dynamoTableName', '') ===
-              `omni-wt-rt-shipment-file-${process.env.STAGE}`
-            ) {
+            } else if (dynamoTableName === `omni-wt-rt-shipment-file-${process.env.STAGE}`) {
               if (get(data, 'CustomerAccess', '') !== 'Y') {
-                console.info(
-                  'This document event customer access is not Y, so skipping the process.'
-                );
-                return;
+                console.info('SKIPPING, There is no frieght order Id for this shipment.');
+                throw new Error('SKIPPING, There is no frieght order Id for this shipment.');
               }
               eventType = 'documents';
               orderStatus = get(data, 'FK_DocType', '');
@@ -98,12 +85,7 @@ module.exports.handler = async (event, context) => {
               eventType = 'milestones';
               orderStatus = get(data, 'FK_OrderStatusId', '');
             }
-
-            console.info(data);
-          } else if (
-            get(message, 'eventSourceARN', '').split('/')[1] ===
-            `omni-p44-shipment-location-updates-${process.env.STAGE}`
-          ) {
+          } else {
             eventType = 'geolocation';
 
             data = AWS.DynamoDB.Converter.unmarshall(
@@ -120,16 +102,13 @@ module.exports.handler = async (event, context) => {
                 ':Housebill': get(data, 'HouseBillNo'),
               },
             };
-            const res = await getData(headerParams);
-            console.info(res);
-            fileNumber = get(res, '[0].PK_OrderNo');
+            const headerData = await getData(headerParams);
+            console.info(headerData);
+            fileNumber = get(headerData, '[0].PK_OrderNo');
             location = {
               latitude: get(data, 'latitude'),
               longitute: get(data, 'longitude'),
             };
-            console.info(location);
-          } else {
-            console.info('skipper the events as not matching the requirement');
           }
           const referenceData = await fetchRefernceNo(fileNumber);
 
@@ -140,12 +119,18 @@ module.exports.handler = async (event, context) => {
             'ReferenceNo',
             ''
           );
-          if(orderId === ''){
-            console.info('There is no frieght order Id for this shipment.so skipping the process.');
-            return
+          if (orderId === '') {
+            console.info('There is no frieght order Id for this shipment.');
+            throw new Error('SKIPPING, There is no frieght order Id for this shipment.');
           }
 
-          console.info(fileNumber, housebill, eventType);
+          console.info(
+            'fileNumber, housebill, eventType, orderStatus ',
+            fileNumber,
+            housebill,
+            eventType,
+            orderStatus
+          );
           const payload = await getPayloadData(
             fileNumber,
             housebill,
@@ -157,13 +142,14 @@ module.exports.handler = async (event, context) => {
           );
           console.info(JSON.stringify(payload));
 
-          if (get(payload, 'events[0].stopId', '') === '' || get(payload, 'orderId', '') === '') {
-            console.info('stopId or orderId(freightOrderId) is not yet populated');
-            return;
+          if (get(payload, 'events[0].stopId', '') === '') {
+            console.info('stopId is doesnt exit');
+            throw new Error('SKIPPING, There is no frieght order Id for this shipment.');
           }
           dynamoData.Payload = JSON.stringify(payload);
           const token = await getLbnToken();
           dynamoData.Payload = await sendOrderEventsLbn(token, payload);
+          dynamoData.Status = 'SUCCESS';
           await putLogItem(dynamoData);
         } catch (error) {
           console.error('Error for orderNo: ', fileNumber);
@@ -174,11 +160,12 @@ module.exports.handler = async (event, context) => {
           } else {
             errorMsgVal = error;
           }
-          const flag = errorMsgVal.split(',')[0];
-          if (flag !== 'Error') {
+          let flag = errorMsgVal.split(',')[0];
+          if (flag !== 'SKIPPING') {
+            flag = 'ERROR';
             const params = {
-              Message: `An error occurred in function ${context.functionName}.\n\nERROR DETAILS: ${error}.\n\nId: ${get(dynamoData, 'Id', '')}.\n\nEVENT: ${JSON.stringify(event)}.\n\nNote: Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.`,
-              Subject: `Bio Rad Update Shipment ERROR ${context.functionName}`,
+              Message: `An error occurred in function ${context.functionName}.\n\nERROR DETAILS: ${error}.\n\nId: ${get(dynamoData, 'Id', '')}.\n\nEVENT: ${JSON.stringify(event)}.\n\nFileNumber: ${fileNumber}. \n\nNote: Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.`,
+              Subject: `Bio Rad Send Billing Invoice ERROR ${context.functionName}`,
               TopicArn: process.env.NOTIFICATION_ARN,
             };
             try {
@@ -191,7 +178,7 @@ module.exports.handler = async (event, context) => {
             errorMsgVal = errorMsgVal.split(',').slice(1);
           }
           dynamoData.ErrorMsg = errorMsgVal;
-          dynamoData.Status = 'FAILED';
+          dynamoData.Status = flag;
           await putLogItem(dynamoData);
         }
       })
@@ -222,11 +209,18 @@ module.exports.handler = async (event, context) => {
   }
 };
 
-async function getPayloadData(orderNo, housebill, location, data, dynamoData, referenceData, orderId) {
+async function getPayloadData(
+  fileNumber,
+  housebill,
+  location,
+  data,
+  dynamoData,
+  referenceData,
+  orderId
+) {
   try {
-    console.info(orderNo);
-    const trackingData = await fetchTackingData(orderNo);
-    
+    const trackingData = await fetchTackingData(fileNumber);
+
     const slocid = get(
       referenceData.find(
         (obj) => get(obj, 'CustomerType') === 'S' && get(obj, 'FK_RefTypeId') === 'STO'
@@ -252,7 +246,6 @@ async function getPayloadData(orderNo, housebill, location, data, dynamoData, re
     let events;
     let creationDateTimeUTC;
     if (eventType === 'milestones') {
-      console.info(orderStatus);
       const eventObj = get(CONSTANTS, eventType, []).find((obj) =>
         get(obj, 'statusType', []).includes(orderStatus)
       );
@@ -291,7 +284,6 @@ async function getPayloadData(orderNo, housebill, location, data, dynamoData, re
         },
       ];
     } else if (eventType === 'exceptions') {
-      console.info('orderStatus: ', orderStatus);
       const eventObj = get(CONSTANTS, eventType, []).find((obj) =>
         get(obj, 'statusType', []).includes(orderStatus)
       );
@@ -318,10 +310,8 @@ async function getPayloadData(orderNo, housebill, location, data, dynamoData, re
         },
       ];
     } else {
-      console.info('status: ', get(data, 'FK_DocType', ''));
-
-      const docType = get(CONSTANTS, `docType.${get(data, 'FK_DocType', '').toUpperCase()}`);
-      console.info('doctype: ', docType);
+      const docType = get(CONSTANTS, `docType.${orderStatus.toUpperCase()}`);
+      console.info('document type: ', docType);
       const docData = await getDocsFromWebsli({ housebill, doctype: `doctype=${docType}` });
 
       creationDateTimeUTC = await modifyTime(get(data, 'UploadDateTime', ''));
@@ -332,7 +322,7 @@ async function getPayloadData(orderNo, housebill, location, data, dynamoData, re
         stopId = 'clocid';
       }
       console.info(
-        'eventtype, orderStatus,  ',
+        'eventtype, orderStatus,  lbn eventType',
         eventType,
         orderStatus,
         get(CONSTANTS, `${eventType}.${orderStatus}`, '')
@@ -346,7 +336,7 @@ async function getPayloadData(orderNo, housebill, location, data, dynamoData, re
           stopId: get(stopIdValue, stopId, ''),
         },
       ];
-      console.info(docData);
+      console.info('document data: ', docData);
       if (docData.length > 0) {
         const fileName = get(docData, '[0].filename', '');
         let mimeType;
@@ -378,7 +368,7 @@ async function getPayloadData(orderNo, housebill, location, data, dynamoData, re
       carrier: {
         carrierLBNID: get(shipmentData, '[0].CarrierPartyLbnId', ''),
       },
-      technicalId: get(trackingData, 'Note', ''),
+      technicalId: get(trackingData, 'Note', '').replace(/^technicalId /, ''),
       orderId,
       trackId: housebill,
       creationDateTimeUTC,

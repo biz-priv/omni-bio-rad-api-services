@@ -5,9 +5,7 @@ function:
   runtime: nodejs20.x
   timeout: 900
   tags:
-    Name: billing invoice
-    Environment: ${opt:stage, 'dev'}
-    Application: bio rad
+    Name: send billing invoice
   layers:
     - { Ref: NodeModulesLambdaLayer }
   package:
@@ -27,3 +25,6 @@ function:
     BIO_RAD_BILL_TO_NUMBERS: ${ssm:/omni/${self:provider.stage}/bio-rad/bill-to/numbers}
     GET_DOCUMENT_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/wt/get-document/api.url}
     LBN_BILLING_INVOICE_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-send-billing-invoice-endpoint}
+    SHIPMENT_HEADER_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/shipment-header/ddb.tableName}
+    REFERENCE_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/references/ddb.tableName}
+    SHIPMENT_APAR_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/shipment-apar/ddb.tableName}

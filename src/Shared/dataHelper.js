@@ -61,7 +61,7 @@ async function sendToWT(postData) {
     console.info('config: ', config);
     const res = await axios.request(config);
     if (get(res, 'status', '') === 200) {
-      console.info('WT result: ', res)
+      console.info('WT result: ', res);
       return get(res, 'data', '');
     }
     throw new Error(`WORLD TRAK API Request Failed: ${res}`);
@@ -376,6 +376,7 @@ async function getLbnToken() {
 async function getDocsFromWebsli({ housebill, doctype }) {
   try {
     const url = `${process.env.GET_DOCUMENT_URL}/housebill=${housebill}/${doctype}`;
+    console.info(url);
     const queryType = await axios.get(url);
     const docs = get(queryType, 'data.wtDocs.wtDoc', []);
     return docs.map((doc) => ({

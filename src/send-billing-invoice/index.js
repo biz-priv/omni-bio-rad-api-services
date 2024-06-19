@@ -39,39 +39,33 @@ module.exports.handler = async (event, context) => {
           dynamoData.Process = 'SEND_BILLING_INVOICE';
 
           const recordBody = JSON.parse(get(record, 'body', {}));
-          console.info('recordBody: ', recordBody);
-          console.info(recordBody.Message);
           const message = JSON.parse(get(recordBody, 'Message', ''));
-          const oldImage = get(message, 'OldImage', '');
-          if (oldImage !== '') {
-            console.info('Skipping this event, as this is an update or delete shipment.');
-            return;
-          }
+
           const newImage = AWS.DynamoDB.Converter.unmarshall(get(message, 'NewImage', {}));
           if (
             get(newImage, 'PostedDateTime', '').includes('1900') ||
             get(newImage, 'PostedDateTime', '') === '' ||
             get(newImage, 'PostedDateTime', '') === null
           ) {
-            console.info('This shipment is not yet posted');
-            return;
+            console.info('SKIPPING, This shipment is not yet posted');
+            throw new Error('SKIPPING, This shipment is not yet posted');
           }
           orderNo = get(newImage, 'FK_OrderNo', '');
-          const validShipmentFlag = await verifyShipment(
-            get(newImage, 'FK_OrderNo', ''),
-            headerData,
-            referencesData,
-            freightOrderId
-          );
+          const verifyShipmentData = await verifyShipment(get(newImage, 'FK_OrderNo', ''));
+          freightOrderId = get(verifyShipmentData, 'freightOrderId', '');
+          headerData = get(verifyShipmentData, 'headerData', []);
+          referencesData = get(verifyShipmentData, 'referencesData', []);
 
           dynamoData.FreightOrderId = freightOrderId;
           dynamoData.OrderNo = orderNo;
 
-          if (!validShipmentFlag) {
+          if (!get(verifyShipmentData, 'validShipmentFlag', false)) {
             console.info(
-              'This shipment is not valid to process the shipment(either this is not belong to bio rad or this doesnt have freight order id in references table).'
+              'SKIPPING, This shipment is not valid to process the shipment(either this is not belong to bio rad or freight order id is missing).'
             );
-            return;
+            throw new Error(
+              'SKIPPING, This shipment is not valid to process the shipment(either this is not belong to bio rad or freight order id is missing).'
+            );
           }
           const payload = await preparePayload(
             newImage,
@@ -79,6 +73,7 @@ module.exports.handler = async (event, context) => {
             referencesData,
             freightOrderId
           );
+          console.info('payload: ', JSON.stringify(payload));
           const token = await getLbnToken();
           dynamoData.Payload = await sendBillingInvoiceLbn(token, payload);
           dynamoData.Status = 'SUCCESS';
@@ -92,11 +87,12 @@ module.exports.handler = async (event, context) => {
           } else {
             errorMsgVal = error;
           }
-          const flag = errorMsgVal.split(',')[0];
-          if (flag !== 'Error') {
+          let flag = get(errorMsgVal.split(','), '[0]', '');
+          if (flag !== 'SKIPPING') {
+            flag = 'ERROR';
             const params = {
-              Message: `An error occurred in function ${context.functionName}.\n\nERROR DETAILS: ${error}.\n\nId: ${get(dynamoData, 'Id', '')}.\n\nEVENT: ${JSON.stringify(event)}.\n\nNote: Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.`,
-              Subject: `Bio Rad Update Shipment ERROR ${context.functionName}`,
+              Message: `An error occurred in function ${context.functionName}.\n\nERROR DETAILS: ${error}.\n\nId: ${get(dynamoData, 'Id', '')}.\n\nEVENT: ${JSON.stringify(event)}.\n\nFileNumber: ${orderNo}. \n\nNote: Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.`,
+              Subject: `Bio Rad Send Billing Invoice ERROR ${context.functionName}`,
               TopicArn: process.env.NOTIFICATION_ARN,
             };
             try {
@@ -106,16 +102,16 @@ module.exports.handler = async (event, context) => {
               console.error('Error while sending sns notification: ', err);
             }
           } else {
-            errorMsgVal = errorMsgVal.split(',').slice(1);
+            errorMsgVal = get(errorMsgVal.split(','), '[1]', '');
           }
           dynamoData.ErrorMsg = errorMsgVal;
-          dynamoData.Status = 'FAILED';
+          dynamoData.Status = flag;
           await putLogItem(dynamoData);
         }
       })
     );
     return {
-      statusCode: 400,
+      statusCode: 200,
       body: JSON.stringify(
         {
           message: 'SUCCESS',
@@ -143,7 +139,7 @@ module.exports.handler = async (event, context) => {
 async function preparePayload(newImage, headerData, referencesData, freightOrderId) {
   try {
     const aparParams = {
-      TableName: process.env.SHIPMENT_HEADER_TABLE,
+      TableName: process.env.SHIPMENT_APAR_TABLE,
       KeyConditionExpression: 'FK_OrderNo = :PK_OrderNo',
       FilterExpression: 'APARCode = :APARCode',
       ExpressionAttributeValues: {
@@ -155,14 +151,15 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
     console.info('apar data: ', aparData);
     const grossAmount = aparData
       .filter((obj) => obj.InvoiceSeqNo === get(newImage, 'InvoiceSeqNo', ''))
-      .reduce((sum, item) => sum + get(item, 'Total', 0), 0);
+      .reduce((sum, item) => sum + Number(get(item, 'Total', 0)), 0);
 
     const trackingData = await fetchTackingData(get(newImage, 'FK_OrderNo', ''));
     console.info('tracking data: ', trackingData);
 
+    console.info('reference data: ', referencesData);
     const purchasingParty = get(
       referencesData.find(
-        (obj) => get(obj, 'CustomerType') === 'B' && get(obj, 'FK_RefTypeId') === 'SID'
+        (obj) => get(obj, 'CustomerType') === 'B' && get(obj, 'FK_RefTypeId') === 'STP'
       ),
       'ReferenceNo',
       ''
@@ -191,7 +188,7 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
       })
     );
 
-    const carrierInvoiceID = `${get(headerData, 'ControllingStation', '') + get(headerData, '[0].Housebill', '')}-${get(newImage, 'InvoiceSeqNo', '').padStart(2, '0')}`;
+    const carrierInvoiceID = `${get(headerData, '[0].ControllingStation', '') + get(headerData, '[0].Housebill', '')}-${get(newImage, 'InvoiceSeqNo', '').padStart(2, '0')}`;
 
     const docData = await getDocsFromWebsli({
       housebill: carrierInvoiceID,
@@ -228,14 +225,14 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
       attachments,
     };
 
-    console.info(payload);
+    return payload;
   } catch (error) {
     console.info(error);
     throw error;
   }
 }
 
-async function verifyShipment(orderNo, headerData, referencesData, freightOrderId) {
+async function verifyShipment(orderNo) {
   try {
     const headerParams = {
       TableName: process.env.SHIPMENT_HEADER_TABLE,
@@ -244,7 +241,8 @@ async function verifyShipment(orderNo, headerData, referencesData, freightOrderI
         ':PK_OrderNo': orderNo,
       },
     };
-    headerData = await getData(headerParams);
+    const headerData = await getData(headerParams);
+    console.info('header data: ', headerData);
     if (!bioRadCustomerIds.includes(get(headerData, '[0].BillNo'))) {
       console.info('This event is not related to bio rad. So, skipping the process.');
       return false;
@@ -258,9 +256,9 @@ async function verifyShipment(orderNo, headerData, referencesData, freightOrderI
         ':FK_OrderNo': orderNo,
       },
     };
-    referencesData = await getData(referencesParams);
+    const referencesData = await getData(referencesParams);
     console.info('references data: ', referencesData);
-    freightOrderId = get(
+    const freightOrderId = get(
       referencesData.find(
         (obj) => get(obj, 'CustomerType') === 'B' && get(obj, 'FK_RefTypeId') === 'SID'
       ),
@@ -268,10 +266,10 @@ async function verifyShipment(orderNo, headerData, referencesData, freightOrderI
       ''
     );
     if (freightOrderId === '') {
-      return false;
+      return { validShipmentFlag: false, headerData, referencesData, freightOrderId };
     }
 
-    return true;
+    return { validShipmentFlag: true, headerData, referencesData, freightOrderId };
   } catch (error) {
     console.info(error);
     throw error;
