@@ -60,7 +60,7 @@ module.exports.handler = async (event, context) => {
     dynamoData.QuoteContactEmail = get(eventBody, 'orderingParty.address.emailAddress', '');
     dynamoData.SourceSystemBusinessPartnerID = get(
       eventBody,
-      'orderingParty.sourceSystemBusinessPartnerID',
+      'carrier.sourceSystemBusinessPartnerID',
       ''
     );
     dynamoData.ShipmentDetails = {};
@@ -105,6 +105,11 @@ module.exports.handler = async (event, context) => {
 
     const headerData = await prepareHeaderData(eventBody);
     console.info(headerData);
+    if (get(headerData, 'Mode', '') === 'Domestic') {
+      dynamoData.ShipmentType = 'LTL';
+    } else {
+      dynamoData.ShipmentType = 'FTL';
+    }
 
     const transportationStages = get(eventBody, 'transportationStages', []);
     const items = get(eventBody, 'items', []);

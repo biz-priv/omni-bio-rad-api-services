@@ -8,11 +8,11 @@ const axios = require('axios');
 const moment = require('moment-timezone');
 const {
   getLbnToken,
-  fetchTackingData,
   modifyTime,
   getShipmentData,
   getDocsFromWebsli,
 } = require('../Shared/dataHelper');
+const { CONSTANTS } = require('../Shared/constants');
 
 const sns = new AWS.SNS();
 const bioRadCustomerIds = process.env.BIO_RAD_BILL_TO_NUMBERS.split(',');
@@ -79,7 +79,7 @@ module.exports.handler = async (event, context) => {
           dynamoData.Status = 'SUCCESS';
           await putLogItem(dynamoData);
         } catch (error) {
-          console.error('Error for orderNo: ', orderNo);
+          console.error('Error for orderNo: ', orderNo, error);
 
           let errorMsgVal = '';
           if (get(error, 'message', null) !== null) {
@@ -89,7 +89,7 @@ module.exports.handler = async (event, context) => {
           }
           let flag = get(errorMsgVal.split(','), '[0]', '');
           if (flag !== 'SKIPPING') {
-            flag = 'ERROR';
+            flag = 'FAILED';
             const params = {
               Message: `An error occurred in function ${context.functionName}.\n\nERROR DETAILS: ${error}.\n\nId: ${get(dynamoData, 'Id', '')}.\n\nEVENT: ${JSON.stringify(event)}.\n\nFileNumber: ${orderNo}. \n\nNote: Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.`,
               Subject: `Bio Rad Send Billing Invoice ERROR ${context.functionName}`,
@@ -153,9 +153,6 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
       .filter((obj) => obj.InvoiceSeqNo === get(newImage, 'InvoiceSeqNo', ''))
       .reduce((sum, item) => sum + Number(get(item, 'Total', 0)), 0);
 
-    const trackingData = await fetchTackingData(get(newImage, 'FK_OrderNo', ''));
-    console.info('tracking data: ', trackingData);
-
     console.info('reference data: ', referencesData);
     const purchasingParty = get(
       referencesData.find(
@@ -165,24 +162,34 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
       ''
     );
 
-    const transportationStageID = get(
-      referencesData.find(
-        (obj) => get(obj, 'CustomerType') === 'S' && get(obj, 'FK_RefTypeId') === 'DL#'
-      ),
-      'ReferenceNo',
-      ''
-    );
-
     const shipmentData = await getShipmentData(freightOrderId);
+    console.info('orderingPartyLbnId: ', get(shipmentData, '[0].OrderingPartyLbnId', ''));
+    console.info('carrierLbnId: ', get(shipmentData, '[0].CarrierPartyLbnId', ''));
+    console.info('billFromParty: ', get(shipmentData, '[0].SourceSystemBusinessPartnerID', ''));
+    console.info('senderSystemId: ', get(shipmentData, '[0].OriginatorId', ''));
 
     const pricingElementsArray = aparData.filter((obj) => obj.Finalize === 'Y');
     const pricingElements = await Promise.all(
       pricingElementsArray.map(async (element) => {
+        let lbnChargeCode;
+        if (get(element, 'ChargeCode', '') === 'FRT') {
+          if (get(element, 'FK_ServiceLevelId', '') === 'HS') {
+            lbnChargeCode = get(CONSTANTS, 'billingInvoiceCodes.FTL', '');
+          } else {
+            lbnChargeCode = get(CONSTANTS, 'billingInvoiceCodes.LTL', '');
+          }
+        } else {
+          lbnChargeCode = get(
+            CONSTANTS,
+            `billingInvoiceCodes.${get(element, 'ChargeCode', '')}`,
+            ''
+          );
+        }
         return {
-          lbnChargeCode: 'BASE_LTL_FLAT',
-          rateAmount: get(element, 'Total', 0),
+          lbnChargeCode,
+          rateAmount: Number(get(element, 'Total', 0)),
           rateAmountCurrency: 'USD',
-          finalAmount: get(element, 'Total', 0),
+          finalAmount: Number(get(element, 'Total', 0)),
           finalAmountCurrency: 'USD',
         };
       })
@@ -212,13 +219,12 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
       baseDocumentType: '1122',
       purchasingParty,
       billFromParty: get(shipmentData, '[0].SourceSystemBusinessPartnerID', ''),
-      senderSystemId: get(trackingData, 'Note', '').substring(46, 56),
+      senderSystemId: get(shipmentData, '[0].OriginatorId', ''),
       items: [
         {
           grossAmount,
           grossAmountCurrency: 'USD',
           freightDocumentID: freightOrderId,
-          transportationStageID,
           pricingElements,
         },
       ],

@@ -29,8 +29,8 @@ module.exports.handler = async (event, context) => {
 
     await Promise.all(
       get(event, 'Records', []).map(async (record) => {
-        orderStatus = ''
-        eventType = ''
+        orderStatus = '';
+        eventType = '';
         const dynamoData = {};
         let fileNumber;
         console.info('record: ', record);
