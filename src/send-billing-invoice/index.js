@@ -272,8 +272,38 @@ async function verifyShipment(orderNo) {
       ''
     );
     if (freightOrderId === '') {
-      return { validShipmentFlag: false, headerData, referencesData, freightOrderId };
+      return {
+        validShipmentFlag: false,
+        headerData,
+        referencesData,
+        freightOrderId,
+        shipmentData: {},
+      };
     }
+
+    // const Params = {
+    //   TableName: process.env.LOGS_TABLE,
+    //   IndexName: 'FreightOrderId-Index',
+    //   KeyConditionExpression: 'FreightOrderId = :FreightOrderId',
+    //   FilterExpression: '#status = :status AND #process = :process',
+    //   ExpressionAttributeNames: {
+    //     '#status': 'Status',
+    //     '#process': 'Process',
+    //   },
+    //   ExpressionAttributeValues: {
+    //     ':FreightOrderId': freightOrderId,
+    //     ':status': 'SUCCESS',
+    //     ':process': 'SEND_BILLING_INVOICE',
+    //   },
+    // };
+
+    // const Result = await getData(Params);
+    // console.info(Result);
+    // if (Result.length > 0) {
+    //   throw new Error(
+    //     `SKIPPING, Invoice already sent for the freight order Id: ${freightOrderId}`
+    //   );
+    // }
 
     return { validShipmentFlag: true, headerData, referencesData, freightOrderId };
   } catch (error) {

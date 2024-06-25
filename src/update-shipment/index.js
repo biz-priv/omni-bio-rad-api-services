@@ -188,6 +188,7 @@ module.exports.handler = async (event, context) => {
     console.info('results: ', get(initialRecord, '[0].ShipmentDetails', ''));
     const updateResponses = [];
     let updateShipmentsFlag = false;
+    dynamoData.HousebillsToDelete = [];
     await Promise.all(
       wtPayloadsData.map(async (data) => {
         console.info(get(data, 'stopId', ''));
@@ -211,6 +212,7 @@ module.exports.handler = async (event, context) => {
             updateFlag,
           });
         } else {
+          dynamoData.HousebillsToDelete.push(get(initialPayload, 'housebill', ''));
           updateShipmentsFlag = true;
           updateResponses.push({
             initialXmlPayload: get(initialPayload, 'xmlPayload', ''),

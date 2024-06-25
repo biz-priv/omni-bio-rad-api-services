@@ -47,22 +47,37 @@ module.exports.handler = async (event, context) => {
 
         const shipmentUpdates = get(dynamoData, 'ShipmentUpdates', []);
         CreateDynamoData.ShipmentDetails = {};
+        CreateDynamoData.Housebill = [];
+        CreateDynamoData.FileNumber = [];
+
+        for (const housebillToDelete of get(CreateDynamoData, 'HousebillsToDelete', [])) {
+          const data = await cancelShipmentApiCall(housebillToDelete);
+          console.info('data after cancelling housebill: ', data);
+          // if(get(data, 'message', '') === 'Failed'){
+          //   throw new Error(
+          //     `Cannot delete the previous housebill: ${housebillToDelete}`
+          //   );
+          // }
+        }
+
         for (const data of shipmentUpdates) {
           console.info(data);
           if (get(data, 'updateFlag', false) === false) {
             dynamoData.ShipmentDetails[get(data, 'stopId')] = data;
             CreateDynamoData.ShipmentDetails[get(data, 'stopId')] = data;
+            CreateDynamoData.Housebill.push(get(data, 'housebill', ''));
+            CreateDynamoData.FileNumber.push(get(data, 'fileNumber', ''));
             console.info('Skip the shipment as there is no update in the payload.', data);
             continue;
           }
 
-          if (get(data, 'intialHousebill', '') !== '') {
-            console.info(
-              'This is an update for existing shipment, so cancelling the old shipment.'
-            );
-            console.info(get(data, 'intialHousebill', ''));
-            await cancelShipmentApiCall(get(data, 'intialHousebill', ''));
-          }
+          // if (get(data, 'intialHousebill', '') !== '') {
+          //   console.info(
+          //     'This is an update for existing shipment, so cancelling the old shipment.'
+          //   );
+          //   console.info(get(data, 'intialHousebill', ''));
+          //   await cancelShipmentApiCall(get(data, 'intialHousebill', ''));
+          // }
 
           const xmlResponse = await sendToWT(get(data, 'xmlPayload', ''));
 
@@ -104,6 +119,8 @@ module.exports.handler = async (event, context) => {
           CreateDynamoData.ShipmentDetails[get(data, 'stopId')].housebill = housebill;
           CreateDynamoData.ShipmentDetails[get(data, 'stopId')].fileNumber = fileNumber;
           CreateDynamoData.ShipmentDetails[get(data, 'stopId')].xmlResponse = xmlResponse;
+          CreateDynamoData.Housebill.push(housebill);
+          CreateDynamoData.FileNumber.push(fileNumber);
           dynamoData.ShipmentDetails[get(data, 'stopId')] = data;
           dynamoData.ShipmentDetails[get(data, 'stopId')].housebill = housebill;
           dynamoData.ShipmentDetails[get(data, 'stopId')].fileNumber = fileNumber;

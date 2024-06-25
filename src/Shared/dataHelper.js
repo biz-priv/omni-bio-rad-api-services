@@ -468,7 +468,7 @@ async function cancelShipmentApiCall(housebill) {
     return { message, housebill };
   } catch (error) {
     console.error(`For ${housebill} API request failed: `, error);
-    return { message: error, housebill };
+    return { message: 'Failed', housebill };
   }
 }
 
