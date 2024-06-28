@@ -52,7 +52,7 @@ module.exports.handler = async (event, context) => {
           if (
             dynamoTableName === `omni-wt-rt-apar-failure-${process.env.STAGE}` ||
             dynamoTableName === `omni-wt-rt-shipment-milestone-${process.env.STAGE}` ||
-            dynamoTableName === `omni-wt-rt-shipment-file-${process.env.STAGE}`
+            dynamoTableName === `omni-wt-rt-shipment-file-data-${process.env.STAGE}`
           ) {
             data = AWS.DynamoDB.Converter.unmarshall(get(message, 'NewImage', {}));
             fileNumber = get(data, 'FK_OrderNo', '');
@@ -74,7 +74,7 @@ module.exports.handler = async (event, context) => {
             if (dynamoTableName === `omni-wt-rt-apar-failure-${process.env.STAGE}`) {
               eventType = 'exceptions';
               orderStatus = get(data, 'FDCode', '');
-            } else if (dynamoTableName === `omni-wt-rt-shipment-file-${process.env.STAGE}`) {
+            } else if (dynamoTableName === `omni-wt-rt-shipment-file-data-${process.env.STAGE}`) {
               if (get(data, 'CustomerAccess', '') !== 'Y') {
                 console.info('SKIPPING, There is no frieght order Id for this shipment.');
                 throw new Error('SKIPPING, There is no frieght order Id for this shipment.');
