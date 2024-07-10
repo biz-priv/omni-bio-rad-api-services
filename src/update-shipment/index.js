@@ -73,7 +73,12 @@ module.exports.handler = async (event, context) => {
     dynamoData.CallInPhone = `${get(eventBody, 'orderingParty.address.phoneNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.phoneNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.phoneNumber.subscriberId', '')}`;
     dynamoData.CallInFax = `${get(eventBody, 'orderingParty.address.faxNumber.countryDialingCode', '1')} ${get(eventBody, 'orderingParty.address.faxNumber.areaId', '')} ${get(eventBody, 'orderingParty.address.faxNumber.subscriberId', '')}`;
     dynamoData.QuoteContactEmail = get(eventBody, 'orderingParty.address.emailAddress', '');
-    dynamoData.SourceSystemBusinessPartnerID = get(
+    dynamoData.CarrierSourceSystemBusinessPartnerID = get(
+      eventBody,
+      'carrier.sourceSystemBusinessPartnerID',
+      ''
+    );
+    dynamoData.orderingPartySourceSystemBusinessPartnerID = get(
       eventBody,
       'orderingParty.sourceSystemBusinessPartnerID',
       ''

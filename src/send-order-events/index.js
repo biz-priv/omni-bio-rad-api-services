@@ -110,6 +110,8 @@ module.exports.handler = async (event, context) => {
               longitute: get(data, 'longitude'),
             };
           }
+
+          dynamoData.OrderStatus = orderStatus;
           const referenceData = await fetchRefernceNo(fileNumber);
 
           const orderId = get(

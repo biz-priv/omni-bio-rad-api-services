@@ -165,7 +165,10 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
     const shipmentData = await getShipmentData(freightOrderId);
     console.info('orderingPartyLbnId: ', get(shipmentData, '[0].OrderingPartyLbnId', ''));
     console.info('carrierLbnId: ', get(shipmentData, '[0].CarrierPartyLbnId', ''));
-    console.info('billFromParty: ', get(shipmentData, '[0].SourceSystemBusinessPartnerID', ''));
+    console.info(
+      'billFromParty: ',
+      get(shipmentData, '[0].CarrierSourceSystemBusinessPartnerID', '')
+    );
     console.info('senderSystemId: ', get(shipmentData, '[0].OriginatorId', ''));
 
     const pricingElementsArray = aparData.filter((obj) => obj.Finalize === 'Y');
@@ -218,7 +221,7 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
       carrierLbnId: get(shipmentData, '[0].CarrierPartyLbnId', ''),
       baseDocumentType: '1122',
       purchasingParty,
-      billFromParty: get(shipmentData, '[0].SourceSystemBusinessPartnerID', ''),
+      billFromParty: get(shipmentData, '[0].CarrierSourceSystemBusinessPartnerID', ''),
       senderSystemId: get(shipmentData, '[0].OriginatorId', ''),
       items: [
         {
