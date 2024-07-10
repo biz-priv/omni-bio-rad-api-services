@@ -63,7 +63,7 @@ module.exports.handler = async (event, context) => {
       'carrier.sourceSystemBusinessPartnerID',
       ''
     );
-    dynamoData.orderingPartySourceSystemBusinessPartnerID = get(
+    dynamoData.OrderingPartySourceSystemBusinessPartnerID = get(
       eventBody,
       'orderingParty.sourceSystemBusinessPartnerID',
       ''

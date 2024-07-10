@@ -153,7 +153,7 @@ async function prepareReferenceList(loadingStage, unloadingStage, dynamoData) {
           RefTypeId: 'SID',
         },
         {
-          ReferenceNo: get(dynamoData, 'orderingPartySourceSystemBusinessPartnerID', ''),
+          ReferenceNo: get(dynamoData, 'OrderingPartySourceSystemBusinessPartnerID', ''),
           CustomerTypeV3: 'BillTo',
           RefTypeId: 'STP',
         },
