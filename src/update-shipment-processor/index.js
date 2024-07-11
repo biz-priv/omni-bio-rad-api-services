@@ -50,7 +50,7 @@ module.exports.handler = async (event, context) => {
         CreateDynamoData.Housebill = [];
         CreateDynamoData.FileNumber = [];
 
-        for (const housebillToDelete of get(CreateDynamoData, 'HousebillsToDelete', [])) {
+        for (const housebillToDelete of get(dynamoData, 'HousebillsToDelete', [])) {
           const data = await cancelShipmentApiCall(housebillToDelete);
           console.info('data after cancelling housebill: ', data);
           // if(get(data, 'message', '') === 'Failed'){
