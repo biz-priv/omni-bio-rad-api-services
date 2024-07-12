@@ -172,7 +172,8 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
     console.info('senderSystemId: ', get(shipmentData, '[0].OriginatorId', ''));
 
     const pricingElementsArray = aparData.filter((obj) => obj.Finalize === 'Y');
-    const pricingElements = await Promise.all(
+    const pricingElements = [];
+    await Promise.all(
       pricingElementsArray.map(async (element) => {
         let lbnChargeCode;
         if (get(element, 'ChargeCode', '') === 'FRT') {
@@ -188,13 +189,15 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
             ''
           );
         }
-        return {
-          lbnChargeCode,
-          rateAmount: Number(get(element, 'Total', 0)),
-          rateAmountCurrency: 'USD',
-          finalAmount: Number(get(element, 'Total', 0)),
-          finalAmountCurrency: 'USD',
-        };
+        if (Number(get(element, 'Total', 0)) !== 0) {
+          pricingElements.push({
+            lbnChargeCode,
+            rateAmount: Number(get(element, 'Total', 0)),
+            rateAmountCurrency: 'USD',
+            finalAmount: Number(get(element, 'Total', 0)),
+            finalAmountCurrency: 'USD',
+          });
+        }
       })
     );
 
