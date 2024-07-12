@@ -152,6 +152,9 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
     const grossAmount = aparData
       .filter((obj) => obj.InvoiceSeqNo === get(newImage, 'InvoiceSeqNo', ''))
       .reduce((sum, item) => sum + Number(get(item, 'Total', 0)), 0);
+    if (grossAmount === 0) {
+      throw new Error(`SKIPPING, This shipment doesn't have any charges: ${freightOrderId}`);
+    }
 
     console.info('reference data: ', referencesData);
     const purchasingParty = get(
