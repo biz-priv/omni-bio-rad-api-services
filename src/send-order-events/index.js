@@ -126,6 +126,8 @@ module.exports.handler = async (event, context) => {
             throw new Error('SKIPPING, There is no frieght order Id for this shipment.');
           }
 
+          await verifyIfEventAlreadySent(orderId);
+
           console.info(
             'fileNumber, housebill, eventType, orderStatus ',
             fileNumber,
@@ -405,5 +407,36 @@ async function sendOrderEventsLbn(token, payload) {
   } catch (error) {
     console.error('Lbn main API Request Failed: ', error);
     throw new Error(`Lbn main API Request Failed: ${error}`);
+  }
+}
+
+async function verifyIfEventAlreadySent(orderId) {
+  try {
+    const Params = {
+      TableName: process.env.LOGS_TABLE,
+      IndexName: 'FreightOrderId-Index',
+      KeyConditionExpression: 'FreightOrderId = :FreightOrderId',
+      FilterExpression: '#status = :status AND #process = :process AND #OrderStatus = :OrderStatus',
+      ExpressionAttributeNames: {
+        '#status': 'Status',
+        '#process': 'Process',
+        '#OrderStatus': 'OrderStatus',
+      },
+      ExpressionAttributeValues: {
+        ':FreightOrderId': orderId,
+        ':status': 'SUCCESS',
+        ':process': 'SEND_ORDER_EVENTS',
+        ':OrderStatus': orderStatus,
+      },
+    };
+
+    const Result = await getData(Params);
+    console.info(Result);
+    if (Result.length > 0) {
+      throw new Error(`SKIPPING, Invoice already sent for this freight order Id: ${orderId}`);
+    }
+  } catch (error) {
+    console.error(error);
+    throw error;
   }
 }
