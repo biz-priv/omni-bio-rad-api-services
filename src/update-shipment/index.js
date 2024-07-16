@@ -28,7 +28,7 @@ module.exports.handler = async (event, context) => {
 
     // const eventBody = get(event, 'body', {});
 
-    const attachments = get(eventBody, 'attachments', []);
+    const attachments = JSON.parse(JSON.stringify(get(eventBody, 'attachments', [])));
     console.info('attachments: ', get(eventBody, 'attachments', []));
 
     if (attachments.length > 0) {
