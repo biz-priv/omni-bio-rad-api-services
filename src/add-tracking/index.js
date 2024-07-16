@@ -39,7 +39,6 @@ module.exports.handler = async (event, context) => {
       ExpressionAttributeNames: {
         '#status': 'Status',
         '#process': 'Process',
-        '#OrderStatus': 'OrderStatus',
       },
       ExpressionAttributeValues: {
         ':FreightOrderId': get(dynamoData, 'FreightOrderId', ''),

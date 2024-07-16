@@ -37,8 +37,6 @@ module.exports.handler = async (event, context) => {
     if (attachments.length > 0) {
       await Promise.all(
         get(eventBody, 'attachments', []).map(async (attachment) => {
-          console.info(attachment.description);
-          console.info(typeof attachment.fileContentBinaryObject);
           attachment.fileContentBinaryObject = 'B64String';
         })
       );
@@ -246,7 +244,7 @@ module.exports.handler = async (event, context) => {
       dynamoData.Housebill.push(housebill);
     }
 
-    const filteredAttachments = await attachments.filter((obj) => obj.typeCode);
+    const filteredAttachments = await attachments.filter((obj) => obj.typeCode === 'ATCMT');
     await Promise.all(
       filteredAttachments.map(async (attachment) => {
         await Promise.all(

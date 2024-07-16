@@ -77,11 +77,11 @@ module.exports.handler = async (event, context) => {
 
         const token = await getLbnToken();
         await sendToLbn(token, payload, dynamoData);
+        dynamoData.Status = 'SUCCESS';
+        await putLogItem(dynamoData);
       })
     );
 
-    dynamoData.Status = 'SUCCESS';
-    await putLogItem(dynamoData);
     return {
       statusCode: 200,
       body: JSON.stringify(
