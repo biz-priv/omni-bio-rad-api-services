@@ -16,7 +16,7 @@ function:
   events:
     - sqs:
         arn: ${ssm:/omni/${self:provider.stage}/bio-rad/send-billing-invoice/sqs.arn}
-        batchSize: 10
+        batchSize: 1
   environment:
     LBN_TOKEN_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint}
     LBN_TOKEN_USERNAME: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/username}
