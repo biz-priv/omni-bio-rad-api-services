@@ -107,7 +107,7 @@ module.exports.handler = async (event, context) => {
             fileNumber = get(headerData, '[0].PK_OrderNo');
             location = {
               latitude: get(data, 'latitude'),
-              longitute: get(data, 'longitude'),
+              longitude: get(data, 'longitude'),
             };
           }
 
