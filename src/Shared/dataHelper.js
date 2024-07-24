@@ -1,5 +1,7 @@
 'use strict';
 
+const AWS = require('aws-sdk');
+const ses = new AWS.SES();
 const xml2js = require('xml2js');
 const { get } = require('lodash');
 const axios = require('axios');
@@ -33,9 +35,10 @@ async function querySourceDb(query) {
       },
       data: { query },
     };
+    console.info('🚀 -> file: dataHelper.js:38 -> querySourceDb -> config:', config);
 
-    console.info('config: ', config);
     const res = await axios.request(config);
+    console.info('🚀 -> file: dataHelper.js:41 -> querySourceDb -> res:', res);
     if (get(res, 'status', '') === 200) {
       return get(res, 'data', '');
     }
@@ -574,7 +577,38 @@ async function getShipmentData(orderId) {
   }
 }
 
+async function sendSESEmail({ message, subject }) {
+  try {
+    const emailArray = ['madhava.matta@bizcloudexperts.com'];
+    const params = {
+      Destination: {
+        ToAddresses: emailArray,
+      },
+      Message: {
+        Body: {
+          Html: {
+            Data: message,
+            Charset: 'UTF-8',
+          },
+        },
+        Subject: {
+          Data: subject,
+          Charset: 'UTF-8',
+        },
+      },
+      Source: 'no-reply@omnilogistics.com',
+    };
+    console.info('🚀 ~ file: helper.js:1747 ~ sendSESEmail ~ params:', params);
+
+    await ses.sendEmail(params).promise();
+  } catch (error) {
+    console.error('Error sending email with SES:', error);
+    throw error;
+  }
+}
+
 module.exports = {
+  sendSESEmail,
   xmlJsonConverter,
   querySourceDb,
   sendToWT,

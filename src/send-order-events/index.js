@@ -66,7 +66,7 @@ module.exports.handler = async (event, context) => {
             const res = await getData(headerParams);
             if (!bioRadCustomerIds.includes(get(res, '[0].BillNo'))) {
               console.info('SKIPPING, This event is not related to bio rad.');
-              throw new Error('SKIPPING, This event is not related to bio rad');
+              return;
             }
 
             housebill = get(res, '[0].Housebill');
@@ -76,8 +76,8 @@ module.exports.handler = async (event, context) => {
               orderStatus = get(data, 'FDCode', '');
             } else if (dynamoTableName === `omni-wt-rt-shipment-file-data-${process.env.STAGE}`) {
               if (get(data, 'CustomerAccess', '') !== 'Y') {
-                console.info('SKIPPING, There is no frieght order Id for this shipment.');
-                throw new Error('SKIPPING, There is no frieght order Id for this shipment.');
+                console.info('SKIPPING, There is no customer access for this document.');
+                throw new Error('SKIPPING, There is no customer access for this document.');
               }
               eventType = 'documents';
               orderStatus = get(data, 'FK_DocType', '');
@@ -148,11 +148,11 @@ module.exports.handler = async (event, context) => {
 
           if (get(payload, 'events[0].stopId', '') === '') {
             console.info('stopId is doesnt exit');
-            throw new Error('SKIPPING, There is no frieght order Id for this shipment.');
+            throw new Error('SKIPPING, There is no stop Id exist for this shipment.');
           }
           dynamoData.Payload = JSON.stringify(payload);
           const token = await getLbnToken();
-          dynamoData.Payload = await sendOrderEventsLbn(token, payload);
+          dynamoData.Response = await sendOrderEventsLbn(token, payload);
           dynamoData.Status = 'SUCCESS';
           await putLogItem(dynamoData);
         } catch (error) {

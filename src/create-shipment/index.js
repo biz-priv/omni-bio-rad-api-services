@@ -24,15 +24,12 @@ const sns = new AWS.SNS();
 const dynamoData = {};
 
 module.exports.handler = async (event, context) => {
-  console.info(event);
-
+  console.info('🚀 -> file: index.js:27 -> module.exports.handler= -> event:', event);
   try {
     const eventBody = JSON.parse(get(event, 'body', {}));
 
-    // const eventBody = get(event, 'body', {});
-
     const attachments = JSON.parse(JSON.stringify(get(eventBody, 'attachments', [])));
-    console.info('attachments: ', get(eventBody, 'attachments', []));
+    console.info('🚀 -> file: index.js:32 -> module.exports.handler= -> attachments:', attachments);
 
     if (attachments.length > 0) {
       await Promise.all(
@@ -48,6 +45,7 @@ module.exports.handler = async (event, context) => {
     dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
     dynamoData.Event = JSON.stringify(eventBody);
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
+    console.info('🚀 -> file: index.js:48 -> module.exports.handler= -> Log Id:', dynamoData.Id);
     dynamoData.Process = 'CREATE';
     dynamoData.FreightOrderId = get(eventBody, 'freightOrderId', '');
     dynamoData.OrderingPartyLbnId = get(eventBody, 'orderingPartyLbnId', '');
@@ -97,7 +95,7 @@ module.exports.handler = async (event, context) => {
       };
 
       const Result = await getData(Params);
-      console.info(Result);
+      console.info('🚀 -> file: index.js:98 -> module.exports.handler= -> Result:', Result);
       if (Result.length > 0) {
         throw new Error(
           `Error, Shipments already created for the provided freight order Id: ${get(dynamoData, 'FreightOrderId', '')}`
@@ -107,7 +105,7 @@ module.exports.handler = async (event, context) => {
     console.info(dynamoData.CSTDateTime);
 
     const headerData = await prepareHeaderData(eventBody);
-    console.info(headerData);
+    console.info('🚀 -> file: index.js:108 -> module.exports.handler= -> headerData:', headerData);
     if (get(headerData, 'Mode', '') === 'Domestic') {
       dynamoData.ShipmentType = 'LTL';
     } else {
@@ -119,7 +117,10 @@ module.exports.handler = async (event, context) => {
 
     // group the items to understand how many shipments were exist in the request.
     const groupedItems = await groupItems(items);
-    console.info(groupedItems);
+    console.info(
+      '🚀 -> file: index.js:120 -> module.exports.handler= -> groupedItems:',
+      groupedItems
+    );
     const groupedItemKeys = Object.keys(groupedItems);
 
     // Prepare all the payloads at once(which helps in multi shipment scenario)
