@@ -1,7 +1,6 @@
 'use strict';
 
 const { get } = require('lodash');
-const AWS = require('aws-sdk');
 const uuid = require('uuid');
 const axios = require('axios');
 const moment = require('moment-timezone');
@@ -17,10 +16,10 @@ const {
   prepareWTPayload,
   groupItems,
   getServiceLevel,
+  sendSESEmail,
 } = require('../Shared/dataHelper');
 const { CONSTANTS } = require('../Shared/constants');
 
-const sns = new AWS.SNS();
 const dynamoData = {};
 
 module.exports.handler = async (event, context) => {
@@ -45,7 +44,7 @@ module.exports.handler = async (event, context) => {
     dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
     dynamoData.Event = JSON.stringify(eventBody);
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
-    console.info('🚀 -> file: index.js:48 -> module.exports.handler= -> Log Id:', dynamoData.Id);
+    console.info('🚀 -> file: index.js:48 -> module.exports.handler= -> Log Id:', get(dynamoData, 'Id', ''));
     dynamoData.Process = 'CREATE';
     dynamoData.FreightOrderId = get(eventBody, 'freightOrderId', '');
     dynamoData.OrderingPartyLbnId = get(eventBody, 'orderingPartyLbnId', '');
@@ -78,7 +77,7 @@ module.exports.handler = async (event, context) => {
         'Error, FreightOrderId or OrderingPartyLbnId or CarrierPartyLbnId is missing in the request, please add the details in the request.'
       );
     } else {
-      const Params = {
+      const logDataParams = {
         TableName: process.env.LOGS_TABLE,
         IndexName: 'FreightOrderId-Index',
         KeyConditionExpression: 'FreightOrderId = :FreightOrderId',
@@ -94,15 +93,14 @@ module.exports.handler = async (event, context) => {
         },
       };
 
-      const Result = await getData(Params);
-      console.info('🚀 -> file: index.js:98 -> module.exports.handler= -> Result:', Result);
-      if (Result.length > 0) {
+      const logDataResult = await getData(logDataParams);
+      console.info('🚀 -> file: index.js:98 -> module.exports.handler= -> logDataResult:', logDataResult);
+      if (logDataResult.length > 0) {
         throw new Error(
           `Error, Shipments already created for the provided freight order Id: ${get(dynamoData, 'FreightOrderId', '')}`
         );
       }
     }
-    console.info(dynamoData.CSTDateTime);
 
     const headerData = await prepareHeaderData(eventBody);
     console.info('🚀 -> file: index.js:108 -> module.exports.handler= -> headerData:', headerData);
@@ -171,20 +169,20 @@ module.exports.handler = async (event, context) => {
           loadingStage,
           unloadingStage
         );
-        console.info(shipperAndConsignee);
+        console.info('🚀 -> file: index.js:208 -> groupedItemKeys.map -> shipperAndConsignee:', shipperAndConsignee);
 
         const referenceList = await prepareReferenceList(loadingStage, unloadingStage, dynamoData);
-        console.info(JSON.stringify(referenceList));
+        console.info('🚀 -> file: index.js:176 -> groupedItemKeys.map -> referenceList:', JSON.stringify(referenceList));
 
         const shipmentLineList = await prepareShipmentLineListDate(get(groupedItems, key, []));
-        console.info(JSON.stringify(shipmentLineList));
+        console.info('🚀 -> file: index.js:179 -> groupedItemKeys.map -> shipmentLineList:', JSON.stringify(shipmentLineList));
 
         const dateValues = await prepareDateValues(
           loadingStage,
           unloadingStage,
           transportationStages
         );
-        console.info(dateValues);
+        console.info('🚀 -> file: index.js:209 -> groupedItemKeys.map -> dateValues:', dateValues);
 
         const payloads = await prepareWTPayload(
           headerData,
@@ -197,7 +195,7 @@ module.exports.handler = async (event, context) => {
         return { ...payloads, stopId: key };
       })
     );
-    console.info(wtPayloadsData);
+    console.info('🚀 -> file: index.js:199 -> module.exports.handler= -> wtPayloadsData:', wtPayloadsData);
 
     // Send the payloads to world trak for shipment creation one by one as it doesn't allow conurrent executions.
     for (const data of wtPayloadsData) {
@@ -283,7 +281,7 @@ module.exports.handler = async (event, context) => {
       ),
     };
   } catch (error) {
-    console.error('Main handler error: ', error);
+    console.info('🚀 -> file: index.js:285 -> module.exports.handler= -> Main handler error:', error);
 
     let errorMsgVal = '';
     if (get(error, 'message', null) !== null) {
@@ -293,16 +291,48 @@ module.exports.handler = async (event, context) => {
     }
     const flag = errorMsgVal.split(',')[0];
     if (flag !== 'Error') {
-      const params = {
-        Message: `An error occurred in function ${context.functionName}.\n\nERROR DETAILS: ${error}.\n\nId: ${get(dynamoData, 'Id', '')}.\n\nEVENT: ${JSON.stringify(event)}.\n\nNote: Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.`,
-        Subject: `Bio Rad Create Shipment ERROR ${context.functionName}`,
-        TopicArn: process.env.NOTIFICATION_ARN,
-      };
       try {
-        await sns.publish(params).promise();
-        console.info('SNS notification has sent');
+        await sendSESEmail({
+          message: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <style>
+                body {
+                  font-family: Arial, sans-serif;
+                }
+                .container {
+                  padding: 20px;
+                  border: 1px solid #ddd;
+                  border-radius: 5px;
+                  background-color: #f9f9f9;
+                }
+                .highlight {
+                  font-weight: bold;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <p>Dear Team,</p>
+                <p>We have an error while creating the shipment:</p>
+                <p><span class="highlight">Error details:</span> <strong>${errorMsgVal}</strong><br>
+                   <span class="highlight">ID:</span> <strong>${get(dynamoData, 'Id', '')}</strong><br>
+                   <span class="highlight">Freight Order Id:</span> <strong>${get(dynamoData, 'FreightOrderId', '')}</strong><br>
+                <p><span class="highlight">Function:</span>${context.functionName}</p>
+                <p><span class="highlight">Note:</span>Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.</p>
+                <p>Thank you,<br>
+                Omni Automation System</p>
+                <p style="font-size: 0.9em; color: #888;">Note: This is a system generated email, Please do not reply to this email.</p>
+              </div>
+            </body>
+            </html>
+          `,
+          subject: `Bio Rad Create Shipment ${process.env.STAGE} ERROR`,
+        });
+        console.info('Notification has been sent');
       } catch (err) {
-        console.error('Error while sending sns notification: ', err);
+        console.info('🚀 -> file: index.js:335 -> module.exports.handler= -> Error while sending error notification:', err);
       }
     } else {
       errorMsgVal = errorMsgVal.split(',').slice(1);
@@ -337,8 +367,9 @@ async function sendAddDocument(xmlString) {
       },
       data: xmlString,
     };
-    console.info('config: ', config);
+    console.info('🚀 -> file: index.js:370 -> sendAddDocument -> config:', config);
     const res = await axios.request(config);
+    console.info('🚀 -> file: index.js:372 -> sendAddDocument -> res:', res);
     if (get(res, 'status', '') !== 200) {
       console.info(get(res, 'data', ''));
       throw new Error(`ADD DOCUMENT API Request Failed: ${res}`);

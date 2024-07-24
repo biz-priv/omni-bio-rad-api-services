@@ -13,15 +13,13 @@ module.exports.handler = async (event, context) => {
   try {
     const eventBody = JSON.parse(get(event, 'body', {}));
 
-    // const eventBody = get(event, 'body', {});
-
     // Set the time zone to CST
     const cstDate = moment().tz('America/Chicago');
     dynamoData.CSTDate = cstDate.format('YYYY-MM-DD');
     dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
     dynamoData.Event = get(event, 'body', '');
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
-    console.info('🚀 -> file: index.js:25 -> module.exports.handler= -> Log Id:', dynamoData.Id);
+    console.info('🚀 -> file: index.js:25 -> module.exports.handler= -> Log Id:', get(dynamoData, 'Id', ''));
     dynamoData.Process = 'ADD_TRACKING';
     dynamoData.FreightOrderId = get(eventBody, 'shipment.orderId', '');
     dynamoData.OrderingPartyLbnId = get(eventBody, 'shipper.shipperLBNID', '');
@@ -127,45 +125,46 @@ module.exports.handler = async (event, context) => {
       try {
         await sendSESEmail({
           message: `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-          }
-          .container {
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            background-color: #f9f9f9;
-          }
-          .highlight {
-            font-weight: bold;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <p>Dear Team,</p>
-          <p>We have an error while adding the tracking details:</p>
-          <p><span class="highlight">Error details:</span> <strong>${error}</strong><br>
-             <span class="highlight">ID:</span> <strong>${get(dynamoData, 'Id', '')}</strong><br>
-             <span class="highlight">Freight Order Id:</span> <strong>${get(dynamoData, 'FreightOrderId', '')}</strong><br>
-          <p><span class="highlight">Note:</span>Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.</p>
-          <p>Thank you,<br>
-          Omni Automation System</p>
-          <p style="font-size: 0.9em; color: #888;">Note: This is a system generated email, Please do not reply to this email.</p>
-        </div>
-      </body>
-      </html>
-      `,
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <style>
+                body {
+                  font-family: Arial, sans-serif;
+                }
+                .container {
+                  padding: 20px;
+                  border: 1px solid #ddd;
+                  border-radius: 5px;
+                  background-color: #f9f9f9;
+                }
+                .highlight {
+                  font-weight: bold;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <p>Dear Team,</p>
+                <p>We have an error while adding the tracking details:</p>
+                <p><span class="highlight">Error details:</span> <strong>${errorMsgVal}</strong><br>
+                   <span class="highlight">ID:</span> <strong>${get(dynamoData, 'Id', '')}</strong><br>
+                   <span class="highlight">Freight Order Id:</span> <strong>${get(dynamoData, 'FreightOrderId', '')}</strong><br>
+                <p><span class="highlight">Function:</span>${context.functionName}</p>
+                <p><span class="highlight">Note:</span>Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.</p>
+                <p>Thank you,<br>
+                Omni Automation System</p>
+                <p style="font-size: 0.9em; color: #888;">Note: This is a system generated email, Please do not reply to this email.</p>
+              </div>
+            </body>
+            </html>
+          `,
           subject: `Bio Rad Add Tracking ${process.env.STAGE} ERROR`,
         });
-        console.info('SNS notification has sent');
+        console.info('Notification has been sent');
       } catch (err) {
         console.info(
-          '🚀 -> file: index.js:161 -> module.exports.handler= -> Error while sending sns notification:',
+          '🚀 -> file: index.js:167 -> module.exports.handler= -> Error while sending error notification:',
           err
         );
       }

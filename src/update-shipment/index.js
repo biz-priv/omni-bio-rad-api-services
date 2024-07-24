@@ -1,7 +1,6 @@
 'use strict';
 
 const { get, isEqual } = require('lodash');
-const AWS = require('aws-sdk');
 const uuid = require('uuid');
 const moment = require('moment-timezone');
 const { putLogItem, getData } = require('../Shared/dynamo');
@@ -14,22 +13,19 @@ const {
   prepareWTPayload,
   groupItems,
   getServiceLevel,
+  sendSESEmail,
 } = require('../Shared/dataHelper');
 const { CONSTANTS } = require('../Shared/constants');
 
-const sns = new AWS.SNS();
 const dynamoData = {};
 
 module.exports.handler = async (event, context) => {
-  console.info(event);
-
+console.info('🚀 -> file: index.js:22 -> module.exports.handler= -> event:', event);
   try {
     const eventBody = JSON.parse(get(event, 'body', {}));
 
-    // const eventBody = get(event, 'body', {});
-
     const attachments = JSON.parse(JSON.stringify(get(eventBody, 'attachments', [])));
-    console.info('attachments: ', get(eventBody, 'attachments', []));
+    console.info('🚀 -> file: index.js:27 -> module.exports.handler= -> attachments:', attachments);
 
     if (attachments.length > 0) {
       await Promise.all(
@@ -54,7 +50,7 @@ module.exports.handler = async (event, context) => {
 
       const Result = await getData(Params);
       initialRecord = Result.filter((obj) => obj.Process === 'CREATE' && obj.Status === 'SUCCESS');
-      console.info(initialRecord);
+      console.info('🚀 -> file: index.js:52 -> module.exports.handler= -> initialRecord:', initialRecord);
     } else {
       throw new Error(
         'Error, FreightOrderId is missing in the request, please add the details in the request.'
@@ -65,6 +61,7 @@ module.exports.handler = async (event, context) => {
     dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
     dynamoData.Event = JSON.stringify(eventBody);
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
+    console.info('🚀 -> file: index.js:63 -> module.exports.handler= -> Log Id:', get(dynamoData, 'Id', ''));
     dynamoData.Process = 'UPDATE';
     dynamoData.FreightOrderId = get(event, 'pathParameters.freightOrderId', '');
     dynamoData.OrderingPartyLbnId = get(event, 'pathParameters.orderingPartyLbnId', '');
@@ -269,16 +266,48 @@ module.exports.handler = async (event, context) => {
     }
     const flag = errorMsgVal.split(',')[0];
     if (flag !== 'Error') {
-      const params = {
-        Message: `An error occurred in function ${context.functionName}.\n\nERROR DETAILS: ${error}.\n\nId: ${get(dynamoData, 'Id', '')}.\n\nEVENT: ${JSON.stringify(event)}.\n\nNote: Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.`,
-        Subject: `Bio Rad Update Shipment ERROR ${context.functionName}`,
-        TopicArn: process.env.NOTIFICATION_ARN,
-      };
       try {
-        await sns.publish(params).promise();
-        console.info('SNS notification has sent');
+        await sendSESEmail({
+          message: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <style>
+                body {
+                  font-family: Arial, sans-serif;
+                }
+                .container {
+                  padding: 20px;
+                  border: 1px solid #ddd;
+                  border-radius: 5px;
+                  background-color: #f9f9f9;
+                }
+                .highlight {
+                  font-weight: bold;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <p>Dear Team,</p>
+                <p>We have an error while updating the shipment:</p>
+                <p><span class="highlight">Error details:</span> <strong>${error}</strong><br>
+                   <span class="highlight">ID:</span> <strong>${get(dynamoData, 'Id', '')}</strong><br>
+                   <span class="highlight">Freight Order Id:</span> <strong>${get(dynamoData, 'FreightOrderId', '')}</strong><br>
+                <p><span class="highlight">Function:</span>${context.functionName}</p>
+                <p><span class="highlight">Note:</span>Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.</p>
+                <p>Thank you,<br>
+                Omni Automation System</p>
+                <p style="font-size: 0.9em; color: #888;">Note: This is a system generated email, Please do not reply to this email.</p>
+              </div>
+            </body>
+            </html>
+          `,
+          subject: `Bio Rad Update Shipment ${process.env.STAGE} ERROR`,
+        });
+        console.info('Notification has been sent');
       } catch (err) {
-        console.error('Error while sending sns notification: ', err);
+        console.info('🚀 -> file: index.js:312 -> module.exports.handler= -> Error while sending error notification:', err);
       }
     } else {
       errorMsgVal = errorMsgVal.split(',').slice(1);

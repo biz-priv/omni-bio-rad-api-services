@@ -7,35 +7,34 @@ const {
   getLbnToken,
   sendToLbn,
   getDocsFromWebsli,
+  sendSESEmail,
 } = require('../Shared/dataHelper');
 const { putLogItem } = require('../Shared/dynamo');
 
-const sns = new AWS.SNS();
 let dynamoData;
 
 module.exports.handler = async (event, context) => {
+  console.info('🚀 -> file: index.js:17 -> module.exports.handler= -> event:', JSON.stringify(event));
   try {
-    console.info(JSON.stringify(event));
 
     const records = get(event, 'Records', []);
 
     await Promise.all(
       records.map(async (record) => {
-        console.info(record);
+        console.info('🚀 -> file: index.js:24 -> records.map -> record:', record);
         dynamoData = AWS.DynamoDB.Converter.unmarshall(get(record, 'dynamodb.NewImage'));
-
-        console.info(dynamoData);
+        console.info('🚀 -> file: index.js:26 -> records.map -> dynamoData:', dynamoData);
 
         const fileNumberArray = get(dynamoData, 'FileNumber');
-        console.info('fileNumberArray: ', fileNumberArray);
+        console.info('🚀 -> file: index.js:29 -> records.map -> fileNumberArray:', fileNumberArray);
 
         const updateQuery = `update tbl_shipmentheader set
             CallInPhone='${get(dynamoData, 'CallInPhone', '')}',
             CallInFax='${get(dynamoData, 'CallInFax', '')}',
             QuoteContactEmail='${get(dynamoData, 'QuoteContactEmail', '')}'
             where pk_orderno in (${fileNumberArray.join(',')});`;
+        console.info('🚀 -> file: index.js:36 -> records.map -> updateQuery:', updateQuery);
 
-        console.info(updateQuery);
         await querySourceDb(updateQuery);
 
         const documentPromises = get(dynamoData, 'Housebill', []).map(async (housebill) => {
@@ -71,9 +70,9 @@ module.exports.handler = async (event, context) => {
           businessDocumentReferences,
           attachments,
         };
+        console.info('🚀 -> file: index.js:73 -> records.map -> payload:', payload);
 
-        console.info('LbnPayload: ', payload);
-        // // dynamoData.LbnPayload = payload;
+        dynamoData.LbnPayload = payload;
 
         const token = await getLbnToken();
         await sendToLbn(token, payload, dynamoData);
@@ -93,7 +92,7 @@ module.exports.handler = async (event, context) => {
       ),
     };
   } catch (error) {
-    console.error('Main handler error: ', error);
+    console.info('🚀 -> file: index.js:95 -> module.exports.handler= -> Main handler error:', error);
 
     let errorMsgVal = '';
     if (get(error, 'message', null) !== null) {
@@ -103,16 +102,48 @@ module.exports.handler = async (event, context) => {
     }
     const flag = errorMsgVal.split(',')[0];
     if (flag !== 'Error') {
-      const params = {
-        Message: `An error occurred in function ${context.functionName}.\n\nERROR DETAILS: ${error}.\n\nId: ${get(dynamoData, 'Id', '')}.\n\nEVENT: ${JSON.stringify(event)}.\n\nNote: Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.`,
-        Subject: `Bio Rad Create Shipment Processor ERROR ${context.functionName}`,
-        TopicArn: process.env.NOTIFICATION_ARN,
-      };
       try {
-        await sns.publish(params).promise();
-        console.info('SNS notification has sent');
+        await sendSESEmail({
+          message: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <style>
+                body {
+                  font-family: Arial, sans-serif;
+                }
+                .container {
+                  padding: 20px;
+                  border: 1px solid #ddd;
+                  border-radius: 5px;
+                  background-color: #f9f9f9;
+                }
+                .highlight {
+                  font-weight: bold;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <p>Dear Team,</p>
+                <p>We have an error while creating the shipment:</p>
+                <p><span class="highlight">Error details:</span> <strong>${errorMsgVal}</strong><br>
+                   <span class="highlight">ID:</span> <strong>${get(dynamoData, 'Id', '')}</strong><br>
+                   <span class="highlight">Freight Order Id:</span> <strong>${get(dynamoData, 'FreightOrderId', '')}</strong><br>
+                <p><span class="highlight">Function:</span>${context.functionName}</p>
+                <p><span class="highlight">Note:</span>Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.</p>
+                <p>Thank you,<br>
+                Omni Automation System</p>
+                <p style="font-size: 0.9em; color: #888;">Note: This is a system generated email, Please do not reply to this email.</p>
+              </div>
+            </body>
+            </html>
+          `,
+          subject: `Bio Rad Create Shipment processor ${process.env.STAGE} ERROR`,
+        });
+        console.info('Notification has been sent');
       } catch (err) {
-        console.error('Error while sending sns notification: ', err);
+        console.info('🚀 -> file: index.js:145 -> module.exports.handler= -> Error while sending error notification:', err);
       }
     } else {
       errorMsgVal = errorMsgVal.split(',').slice(1);

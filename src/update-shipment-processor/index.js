@@ -11,17 +11,15 @@ const {
   querySourceDb,
   getDocsFromWebsli,
   cancelShipmentApiCall,
+  sendSESEmail,
 } = require('../Shared/dataHelper');
 const moment = require('moment-timezone');
 
 const cstDate = moment().tz('America/Chicago');
-const sns = new AWS.SNS();
 let dynamoData;
 
 module.exports.handler = async (event, context) => {
-  console.info(JSON.stringify(event));
-
-  console.info(context);
+  console.info('🚀 -> file: index.js:21 -> module.exports.handler= -> event:', JSON.stringify(event));
 
   try {
     const records = get(event, 'Records', []);
@@ -43,7 +41,7 @@ module.exports.handler = async (event, context) => {
         const CreateDynamoData = Result.filter(
           (obj) => obj.Process === 'CREATE' && obj.Status === 'SUCCESS'
         )[0];
-        console.info(CreateDynamoData);
+        console.info('🚀 -> file: index.js:43 -> records.map -> CreateDynamoData:', CreateDynamoData);
 
         const shipmentUpdates = get(dynamoData, 'ShipmentUpdates', []);
         CreateDynamoData.ShipmentDetails = {};
@@ -52,16 +50,11 @@ module.exports.handler = async (event, context) => {
 
         for (const housebillToDelete of get(dynamoData, 'HousebillsToDelete', [])) {
           const data = await cancelShipmentApiCall(housebillToDelete);
-          console.info('data after cancelling housebill: ', data);
-          // if(get(data, 'message', '') === 'Failed'){
-          //   throw new Error(
-          //     `Cannot delete the previous housebill: ${housebillToDelete}`
-          //   );
-          // }
+          console.info('🚀 -> file: index.js:52 -> records.map -> data after cancelling shipment:', data);
         }
 
         for (const data of shipmentUpdates) {
-          console.info(data);
+          console.info('🚀 -> file: index.js:56 -> records.map -> data:', data);
           if (get(data, 'updateFlag', false) === false) {
             dynamoData.ShipmentDetails[get(data, 'stopId')] = data;
             CreateDynamoData.ShipmentDetails[get(data, 'stopId')] = data;
@@ -70,14 +63,6 @@ module.exports.handler = async (event, context) => {
             console.info('Skip the shipment as there is no update in the payload.', data);
             continue;
           }
-
-          // if (get(data, 'intialHousebill', '') !== '') {
-          //   console.info(
-          //     'This is an update for existing shipment, so cancelling the old shipment.'
-          //   );
-          //   console.info(get(data, 'intialHousebill', ''));
-          //   await cancelShipmentApiCall(get(data, 'intialHousebill', ''));
-          // }
 
           const xmlResponse = await sendToWT(get(data, 'xmlPayload', ''));
 
@@ -142,15 +127,15 @@ module.exports.handler = async (event, context) => {
         }
 
         const fileNumberArray = get(dynamoData, 'FileNumber');
-        console.info('fileNumberArray: ', fileNumberArray);
+        console.info('🚀 -> file: index.js:129 -> records.map -> fileNumberArray:', fileNumberArray);
 
         const updateQuery = `update tbl_shipmentheader set
             CallInPhone='${get(dynamoData, 'CallInPhone', '')}',
             CallInFax='${get(dynamoData, 'CallInFax', '')}',
             QuoteContactEmail='${get(dynamoData, 'QuoteContactEmail', '')}'
             where pk_orderno in (${fileNumberArray.join(',')});`;
+        console.info('🚀 -> file: index.js:136 -> records.map -> updateQuery:', updateQuery);
 
-        console.info(updateQuery);
         await querySourceDb(updateQuery);
 
         const documentPromises = get(dynamoData, 'Housebill', []).map(async (housebill) => {
@@ -186,8 +171,7 @@ module.exports.handler = async (event, context) => {
           businessDocumentReferences,
           attachments,
         };
-
-        console.info('LbnPayload: ', payload);
+        console.info('🚀 -> file: index.js:173 -> records.map -> payload:', payload);
 
         const token = await getLbnToken();
         await sendToLbn(token, payload, dynamoData);
@@ -200,8 +184,7 @@ module.exports.handler = async (event, context) => {
         dynamoData.LastUpdated = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
 
         dynamoData.Status = 'SUCCESS';
-        console.info(dynamoData);
-        console.info('SUCCESS');
+        console.info('🚀 -> file: index.js:186 -> records.map -> dynamoData:', dynamoData);
         await putLogItem(dynamoData);
         await putLogItem(CreateDynamoData);
       })
@@ -218,7 +201,7 @@ module.exports.handler = async (event, context) => {
       ),
     };
   } catch (error) {
-    console.error('Main handler error: ', error);
+    console.info('🚀 -> file: index.js:204 -> module.exports.handler= -> Main handler error:', error);
 
     let errorMsgVal = '';
     if (get(error, 'message', null) !== null) {
@@ -228,16 +211,48 @@ module.exports.handler = async (event, context) => {
     }
     const flag = errorMsgVal.split(',')[0];
     if (flag !== 'Error') {
-      const params = {
-        Message: `An error occurred in function ${context.functionName}.\n\nERROR DETAILS: ${error}.\n\nId: ${get(dynamoData, 'Id', '')}.\n\nEVENT: ${JSON.stringify(event)}.\n\nNote: Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.`,
-        Subject: `Bio Rad Create Shipment Processor ERROR ${context.functionName}`,
-        TopicArn: process.env.NOTIFICATION_ARN,
-      };
       try {
-        await sns.publish(params).promise();
-        console.info('SNS notification has sent');
+        await sendSESEmail({
+          message: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <style>
+                body {
+                  font-family: Arial, sans-serif;
+                }
+                .container {
+                  padding: 20px;
+                  border: 1px solid #ddd;
+                  border-radius: 5px;
+                  background-color: #f9f9f9;
+                }
+                .highlight {
+                  font-weight: bold;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <p>Dear Team,</p>
+                <p>We have an error while updating the shipment:</p>
+                <p><span class="highlight">Error details:</span> <strong>${error}</strong><br>
+                   <span class="highlight">ID:</span> <strong>${get(dynamoData, 'Id', '')}</strong><br>
+                   <span class="highlight">Freight Order Id:</span> <strong>${get(dynamoData, 'FreightOrderId', '')}</strong><br>
+                <p><span class="highlight">Function:</span>${context.functionName}</p>
+                <p><span class="highlight">Note:</span>Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.</p>
+                <p>Thank you,<br>
+                Omni Automation System</p>
+                <p style="font-size: 0.9em; color: #888;">Note: This is a system generated email, Please do not reply to this email.</p>
+              </div>
+            </body>
+            </html>
+          `,
+          subject: `Bio Rad Update Shipment Processor ${process.env.STAGE} ERROR`,
+        });
+        console.info('Notification has been sent');
       } catch (err) {
-        console.error('Error while sending sns notification: ', err);
+        console.error('Error while sending error notification: ', err);
       }
     } else {
       errorMsgVal = errorMsgVal.split(',').slice(1);

@@ -14,10 +14,10 @@ const {
   getOffset,
   getLbnToken,
   getShipmentData,
+  sendSESEmail,
 } = require('../Shared/dataHelper');
 const { CONSTANTS } = require('../Shared/constants');
 
-const sns = new AWS.SNS();
 const bioRadCustomerIds = process.env.BIO_RAD_BILL_TO_NUMBERS.split(',');
 let eventType;
 let orderStatus;
@@ -40,11 +40,12 @@ module.exports.handler = async (event, context) => {
           dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
           dynamoData.Event = record;
           dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
+          console.info('🚀 -> file: index.js:42 -> get -> Log Id:', get(dynamoData, 'Id', ''));
           dynamoData.Process = 'SEND_ORDER_EVENTS';
 
           const recordBody = JSON.parse(get(record, 'body', {}));
           const message = JSON.parse(get(recordBody, 'Message', ''));
-          console.info('message body: ', message);
+          console.info('🚀 -> file: index.js:47 -> get -> message:', message);
           let housebill;
           let location;
           let data;
@@ -167,16 +168,48 @@ module.exports.handler = async (event, context) => {
           let flag = errorMsgVal.split(',')[0];
           if (flag !== 'SKIPPING') {
             flag = 'ERROR';
-            const params = {
-              Message: `An error occurred in function ${context.functionName}.\n\nERROR DETAILS: ${error}.\n\nId: ${get(dynamoData, 'Id', '')}.\n\nEVENT: ${JSON.stringify(event)}.\n\nFileNumber: ${fileNumber}. \n\nNote: Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.`,
-              Subject: `Bio Rad Send Billing Invoice ERROR ${context.functionName}`,
-              TopicArn: process.env.NOTIFICATION_ARN,
-            };
             try {
-              await sns.publish(params).promise();
-              console.info('SNS notification has sent');
+              await sendSESEmail({
+                message: `
+                  <!DOCTYPE html>
+                  <html>
+                  <head>
+                    <style>
+                      body {
+                        font-family: Arial, sans-serif;
+                      }
+                      .container {
+                        padding: 20px;
+                        border: 1px solid #ddd;
+                        border-radius: 5px;
+                        background-color: #f9f9f9;
+                      }
+                      .highlight {
+                        font-weight: bold;
+                      }
+                    </style>
+                  </head>
+                  <body>
+                    <div class="container">
+                      <p>Dear Team,</p>
+                      <p>We have an error while sending the order events(Milestones):</p>
+                      <p><span class="highlight">Error details:</span> <strong>${errorMsgVal}</strong><br>
+                         <span class="highlight">ID:</span> <strong>${get(dynamoData, 'Id', '')}</strong><br>
+                         <span class="highlight">Freight Order Id:</span> <strong>${get(dynamoData, 'FreightOrderId', '')}</strong><br>
+                      <p><span class="highlight">Function:</span>${context.functionName}</p>
+                      <p><span class="highlight">Note:</span>Use the id: ${get(dynamoData, 'Id', '')} for better search in the logs and also check in dynamodb: ${process.env.LOGS_TABLE} for understanding the complete data.</p>
+                      <p>Thank you,<br>
+                      Omni Automation System</p>
+                      <p style="font-size: 0.9em; color: #888;">Note: This is a system generated email, Please do not reply to this email.</p>
+                    </div>
+                  </body>
+                  </html>
+                `,
+                subject: `Bio Rad Send Order Events ${process.env.STAGE} ERROR`,
+              });
+              console.info('Notification has been sent');
             } catch (err) {
-              console.error('Error while sending sns notification: ', err);
+              console.info('🚀 -> file: index.js:210 -> get -> Error while sending error notification:', err);
             }
           } else {
             errorMsgVal = errorMsgVal.split(',').slice(1);
