@@ -579,7 +579,7 @@ async function getShipmentData(orderId) {
 
 async function sendSESEmail({ message, subject }) {
   try {
-    const emailArray = ['madhava.matta@bizcloudexperts.com'];
+    const emailArray = process.env.NOTIFICATION_EMAILS.split(',');
     const params = {
       Destination: {
         ToAddresses: emailArray,
