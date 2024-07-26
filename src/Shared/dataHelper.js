@@ -360,6 +360,7 @@ async function getLbnToken() {
       headers: {
         Username: process.env.LBN_TOKEN_USERNAME,
         Password: process.env.LBN_TOKEN_PASSWORD,
+        Authorization: process.env.LBN_TOKEN_AUTHORIZATION,
       },
     };
 

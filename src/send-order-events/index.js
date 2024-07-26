@@ -87,6 +87,7 @@ module.exports.handler = async (event, context) => {
               orderStatus = get(data, 'FK_OrderStatusId', '');
             }
           } else {
+            orderStatus = 'geolocation';
             eventType = 'geolocation';
 
             data = AWS.DynamoDB.Converter.unmarshall(
@@ -127,7 +128,9 @@ module.exports.handler = async (event, context) => {
             throw new Error('SKIPPING, There is no frieght order Id for this shipment.');
           }
 
-          await verifyIfEventAlreadySent(orderId);
+          if (eventType !== 'geolocation') {
+            await verifyIfEventAlreadySent(orderId);
+          }
 
           console.info(
             'fileNumber, housebill, eventType, orderStatus ',
@@ -209,7 +212,10 @@ module.exports.handler = async (event, context) => {
               });
               console.info('Notification has been sent');
             } catch (err) {
-              console.info('🚀 -> file: index.js:210 -> get -> Error while sending error notification:', err);
+              console.info(
+                '🚀 -> file: index.js:210 -> get -> Error while sending error notification:',
+                err
+              );
             }
           } else {
             errorMsgVal = errorMsgVal.split(',').slice(1);
