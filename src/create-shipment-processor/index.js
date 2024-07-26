@@ -10,6 +10,7 @@ const {
   sendSESEmail,
 } = require('../Shared/dataHelper');
 const { putLogItem } = require('../Shared/dynamo');
+const { CONSTANTS } = require('../Shared/constants');
 
 let dynamoData;
 
