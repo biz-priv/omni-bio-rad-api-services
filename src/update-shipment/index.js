@@ -49,7 +49,7 @@ console.info('🚀 -> file: index.js:22 -> module.exports.handler= -> event:', e
       };
 
       const Result = await getData(Params);
-      initialRecord = Result.filter((obj) => obj.Process === 'CREATE' && obj.Status === 'SUCCESS');
+      initialRecord = Result.filter((obj) => obj.Process === get(CONSTANTS, 'shipmentProcess.create', '') && obj.Status === get(CONSTANTS, 'statusVal.success', ''));
       console.info('🚀 -> file: index.js:52 -> module.exports.handler= -> initialRecord:', initialRecord);
     } else {
       throw new Error(
@@ -62,7 +62,7 @@ console.info('🚀 -> file: index.js:22 -> module.exports.handler= -> event:', e
     dynamoData.Event = JSON.stringify(eventBody);
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
     console.info('🚀 -> file: index.js:63 -> module.exports.handler= -> Log Id:', get(dynamoData, 'Id', ''));
-    dynamoData.Process = 'UPDATE';
+    dynamoData.Process = get(CONSTANTS, 'shipmentProcess.update', '');
     dynamoData.FreightOrderId = get(event, 'pathParameters.freightOrderId', '');
     dynamoData.OrderingPartyLbnId = get(event, 'pathParameters.orderingPartyLbnId', '');
     dynamoData.OriginatorId = get(event, 'pathParameters.originatorId', '');
@@ -239,7 +239,7 @@ console.info('🚀 -> file: index.js:22 -> module.exports.handler= -> event:', e
         time: cstDate.format('YYYY-MM-DD HH:mm:ss SSS'),
       });
       await putLogItem(initialRecord);
-      dynamoData.Status = 'SUCCESS';
+      dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
     }
 
     console.info(dynamoData);
@@ -313,7 +313,7 @@ console.info('🚀 -> file: index.js:22 -> module.exports.handler= -> event:', e
       errorMsgVal = errorMsgVal.split(',').slice(1);
     }
     dynamoData.ErrorMsg = errorMsgVal;
-    dynamoData.Status = 'FAILED';
+    dynamoData.Status = get(CONSTANTS, 'statusVal.failed', '');
     await putLogItem(dynamoData);
     return {
       statusCode: 400,

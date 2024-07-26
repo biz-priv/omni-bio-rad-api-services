@@ -76,7 +76,7 @@ module.exports.handler = async (event, context) => {
 
         const token = await getLbnToken();
         await sendToLbn(token, payload, dynamoData);
-        dynamoData.Status = 'SUCCESS';
+        dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
         await putLogItem(dynamoData);
       })
     );
@@ -149,7 +149,7 @@ module.exports.handler = async (event, context) => {
       errorMsgVal = errorMsgVal.split(',').slice(1);
     }
     dynamoData.ErrorMsg = errorMsgVal;
-    dynamoData.Status = 'FAILED';
+    dynamoData.Status = get(CONSTANTS, 'statusVal.failed', '');
     await putLogItem(dynamoData);
     return {
       statusCode: 400,

@@ -37,7 +37,7 @@ module.exports.handler = async (event, context) => {
           dynamoData.Event = record;
           dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
           console.info('🚀 -> file: index.js:38 -> get -> Log Id:', get(dynamoData, 'Id', ''));
-          dynamoData.Process = 'SEND_BILLING_INVOICE';
+          dynamoData.Process = get(CONSTANTS, 'shipmentProcess.sendBillingInvoice', '');
 
           const recordBody = JSON.parse(get(record, 'body', {}));
           const message = JSON.parse(get(recordBody, 'Message', ''));
@@ -77,7 +77,7 @@ module.exports.handler = async (event, context) => {
           console.info('payload: ', JSON.stringify(payload));
           const token = await getLbnToken();
           dynamoData.Payload = await sendBillingInvoiceLbn(token, payload);
-          dynamoData.Status = 'SUCCESS';
+          dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
           await putLogItem(dynamoData);
         } catch (error) {
           console.error('Error for orderNo: ', orderNo, error);
@@ -90,7 +90,7 @@ module.exports.handler = async (event, context) => {
           }
           let flag = get(errorMsgVal.split(','), '[0]', '');
           if (flag !== 'SKIPPING') {
-            flag = 'FAILED';
+            flag = get(CONSTANTS, 'statusVal.failed', '');
             try {
               await sendSESEmail({
                 message: `
@@ -147,7 +147,7 @@ module.exports.handler = async (event, context) => {
       statusCode: 200,
       body: JSON.stringify(
         {
-          message: 'SUCCESS',
+          message: get(CONSTANTS, 'statusVal.success', ''),
         },
         null,
         2
@@ -160,7 +160,7 @@ module.exports.handler = async (event, context) => {
       statusCode: 400,
       body: JSON.stringify(
         {
-          message: 'FAILED',
+          message: 'Failed',
         },
         null,
         2
@@ -334,8 +334,8 @@ async function verifyShipment(orderNo) {
       },
       ExpressionAttributeValues: {
         ':FreightOrderId': freightOrderId,
-        ':status': 'SUCCESS',
-        ':process': 'SEND_BILLING_INVOICE',
+        ':status': get(CONSTANTS, 'statusVal.success', ''),
+        ':process': get(CONSTANTS, 'shipmentProcess.sendBillingInvoice', ''),
       },
     };
 

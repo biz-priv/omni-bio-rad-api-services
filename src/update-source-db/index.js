@@ -10,10 +10,7 @@ module.exports.handler = async (event) => {
     const eventBody = JSON.parse(get(event, 'body', {}));
     const query = eventBody.query;
     console.info('getQuery: ', query);
-    const request = await connectToSQLServer();
-    const result = await request.query(query);
-
-    console.info(result);
+    await connectToSQLServer(query);
     return {
       statusCode: 200,
       body: JSON.stringify(
@@ -39,8 +36,8 @@ module.exports.handler = async (event) => {
   }
 };
 
-async function connectToSQLServer() {
-  const config = {
+async function connectToSQLServer(query) {
+  const pool = new sql.ConnectionPool({
     user: process.env.DB_USERNAME,
     password: process.env.DB_PASSWORD,
     server: process.env.DB_SERVER,
@@ -49,13 +46,27 @@ async function connectToSQLServer() {
     options: {
       trustServerCertificate: true,
     },
-  };
+})
+
+
+  // const config = {
+  //   user: process.env.DB_USERNAME,
+  //   password: process.env.DB_PASSWORD,
+  //   server: process.env.DB_SERVER,
+  //   port: Number(process.env.DB_PORT),
+  //   database: process.env.DB_DATABASE,
+  //   options: {
+  //     trustServerCertificate: true,
+  //   },
+  // };
 
   try {
-    await sql.connect(config);
+    await pool.connect()
+    // await sql.connect(config);
     console.info('Connected to SQL Server');
     const request = new sql.Request();
-    return request;
+    await request.query(query);
+    await pool.close()
   } catch (err) {
     console.error('Error: ', err);
     throw err;

@@ -562,14 +562,14 @@ async function getShipmentData(orderId) {
       },
       ExpressionAttributeValues: {
         ':FreightOrderId': orderId,
-        ':status': 'SUCCESS',
-        ':process': 'CREATE',
+        ':status': get(CONSTANTS, 'statusVal.success', ''),
+        ':process': get(CONSTANTS, 'shipmentProcess.create', ''),
       },
     };
 
-    // console.info(Params);
+    console.info(Params);
     const Result = await getData(Params);
-    // console.info('bio rad data: ', Result);
+    console.info('bio rad data: ', Result);
     return Result;
   } catch (error) {
     console.info('error while reading shipment data from logs table: ', orderId);

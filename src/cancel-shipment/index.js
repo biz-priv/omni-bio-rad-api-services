@@ -5,6 +5,7 @@ const uuid = require('uuid');
 const moment = require('moment-timezone');
 const { putLogItem, getData } = require('../Shared/dynamo');
 const { cancelShipmentApiCall, sendSESEmail } = require('../Shared/dataHelper');
+const { CONSTANTS } = require('../Shared/constants');
 
 const dynamoData = {};
 
@@ -20,7 +21,7 @@ module.exports.handler = async (event, context) => {
     dynamoData.Event = event;
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
     console.info('🚀 -> file: index.js:25 -> module.exports.handler= -> Log Id:', get(dynamoData, 'Id', ''));
-    dynamoData.Process = 'CANCEL';
+    dynamoData.Process = get(CONSTANTS, 'shipmentProcess.cancel', '');
     dynamoData.XmlPayload = {};
     dynamoData.XmlResponse = {};
 
@@ -54,7 +55,7 @@ module.exports.handler = async (event, context) => {
         await cancelShipmentApiCall(housebill);
       })
     );
-    dynamoData.Status = 'SUCCESS';
+    dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
     await putLogItem(dynamoData);
     return {
       statusCode: 200,
@@ -125,7 +126,7 @@ module.exports.handler = async (event, context) => {
       errorMsgVal = errorMsgVal.split(',').slice(1);
     }
     dynamoData.ErrorMsg = errorMsgVal;
-    dynamoData.Status = 'FAILED';
+    dynamoData.Status = get(CONSTANTS, 'statusVal.failed', '');
     await putLogItem(dynamoData);
     return {
       statusCode: 400,
@@ -172,6 +173,7 @@ async function getHousebills(referenceNo) {
         };
         const headerResult = await getData(headerParams);
 
+        // If any shipment status is other than WEB or CAN, then it considers as shipment is already in process
         const unwantedArray = headerResult.filter(
           (obj) => !['WEB', 'CAN'].includes(obj.FK_OrderStatusId)
         );
@@ -179,6 +181,7 @@ async function getHousebills(referenceNo) {
           throw new Error(`Error, Provided freightOrderId cannot be cancelled ${referenceNo}.`);
         }
 
+        // Considering only WEB because CAN means already the shipment is cancelled.
         const filteredArray = headerResult
           .filter((obj) => ['WEB'].includes(obj.FK_OrderStatusId) && obj.Housebill)
           .map((obj) => obj.Housebill);

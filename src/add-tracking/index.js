@@ -5,6 +5,7 @@ const { putLogItem, getData } = require('../Shared/dynamo');
 const uuid = require('uuid');
 const moment = require('moment-timezone');
 const { querySourceDb, sendSESEmail } = require('../Shared/dataHelper');
+const { CONSTANTS } = require('../Shared/constants');
 
 const dynamoData = {};
 
@@ -20,7 +21,7 @@ module.exports.handler = async (event, context) => {
     dynamoData.Event = get(event, 'body', '');
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
     console.info('🚀 -> file: index.js:25 -> module.exports.handler= -> Log Id:', get(dynamoData, 'Id', ''));
-    dynamoData.Process = 'ADD_TRACKING';
+    dynamoData.Process = get(CONSTANTS, 'shipmentProcess.addTracking', '');
     dynamoData.FreightOrderId = get(eventBody, 'shipment.orderId', '');
     dynamoData.OrderingPartyLbnId = get(eventBody, 'shipper.shipperLBNID', '');
     dynamoData.CarrierPartyLbnId = get(eventBody, 'carrier.carrierLBNID', '');
@@ -38,8 +39,8 @@ module.exports.handler = async (event, context) => {
       },
       ExpressionAttributeValues: {
         ':FreightOrderId': get(dynamoData, 'FreightOrderId', ''),
-        ':status': 'SUCCESS',
-        ':process': 'ADD_TRACKING',
+        ':status': get(CONSTANTS, 'statusVal.success', ''),
+        ':process': get(CONSTANTS, 'shipmentProcess.addTracking', ''),
       },
     };
 
@@ -95,7 +96,7 @@ module.exports.handler = async (event, context) => {
       throw trackingNotesError;
     }
 
-    dynamoData.Status = 'SUCCESS';
+    dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
     await putLogItem(dynamoData);
     return {
       statusCode: 200,
@@ -172,7 +173,7 @@ module.exports.handler = async (event, context) => {
       errorMsgVal = errorMsgVal.split(',').slice(1);
     }
     dynamoData.ErrorMsg = errorMsgVal;
-    dynamoData.Status = 'FAILED';
+    dynamoData.Status = get(CONSTANTS, 'statusVal.failed', '');
     await putLogItem(dynamoData);
     return {
       statusCode: 400,

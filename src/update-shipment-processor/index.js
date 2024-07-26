@@ -14,6 +14,7 @@ const {
   sendSESEmail,
 } = require('../Shared/dataHelper');
 const moment = require('moment-timezone');
+const { CONSTANTS } = require('../Shared/constants');
 
 const cstDate = moment().tz('America/Chicago');
 let dynamoData;
@@ -39,7 +40,7 @@ module.exports.handler = async (event, context) => {
 
         const Result = await getData(Params);
         const CreateDynamoData = Result.filter(
-          (obj) => obj.Process === 'CREATE' && obj.Status === 'SUCCESS'
+          (obj) => obj.Process === get(CONSTANTS, 'shipmentProcess.create', '') && obj.Status === get(CONSTANTS, 'statusVal.success', '')
         )[0];
         console.info('🚀 -> file: index.js:43 -> records.map -> CreateDynamoData:', CreateDynamoData);
 
@@ -183,7 +184,7 @@ module.exports.handler = async (event, context) => {
         });
         dynamoData.LastUpdated = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
 
-        dynamoData.Status = 'SUCCESS';
+        dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
         console.info('🚀 -> file: index.js:186 -> records.map -> dynamoData:', dynamoData);
         await putLogItem(dynamoData);
         await putLogItem(CreateDynamoData);
@@ -258,9 +259,9 @@ module.exports.handler = async (event, context) => {
       errorMsgVal = errorMsgVal.split(',').slice(1);
     }
     dynamoData.ErrorMsg = errorMsgVal;
-    dynamoData.Status = 'FAILED';
+    dynamoData.Status = get(CONSTANTS, 'statusVal.failed', '');
     console.info(dynamoData);
-    console.info('FAILED');
+    console.info(get(CONSTANTS, 'statusVal.failed', ''));
     await putLogItem(dynamoData);
     return {
       statusCode: 400,

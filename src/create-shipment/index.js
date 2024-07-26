@@ -45,7 +45,7 @@ module.exports.handler = async (event, context) => {
     dynamoData.Event = JSON.stringify(eventBody);
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
     console.info('🚀 -> file: index.js:48 -> module.exports.handler= -> Log Id:', get(dynamoData, 'Id', ''));
-    dynamoData.Process = 'CREATE';
+    dynamoData.Process = get(CONSTANTS, 'shipmentProcess.create', '');
     dynamoData.FreightOrderId = get(eventBody, 'freightOrderId', '');
     dynamoData.OrderingPartyLbnId = get(eventBody, 'orderingPartyLbnId', '');
     dynamoData.OriginatorId = get(eventBody, 'originatorId', '');
@@ -88,8 +88,8 @@ module.exports.handler = async (event, context) => {
         },
         ExpressionAttributeValues: {
           ':FreightOrderId': get(dynamoData, 'FreightOrderId', ''),
-          ':status': 'SUCCESS',
-          ':process': 'CREATE',
+          ':status': get(CONSTANTS, 'statusVal.success', ''),
+          ':process': get(CONSTANTS, 'shipmentProcess.create', ''),
         },
       };
 
@@ -338,7 +338,7 @@ module.exports.handler = async (event, context) => {
       errorMsgVal = errorMsgVal.split(',').slice(1);
     }
     dynamoData.ErrorMsg = errorMsgVal;
-    dynamoData.Status = 'FAILED';
+    dynamoData.Status = get(CONSTANTS, 'statusVal.failed', '');
     await putLogItem(dynamoData);
     return {
       statusCode: 400,

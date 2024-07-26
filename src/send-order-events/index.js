@@ -41,7 +41,7 @@ module.exports.handler = async (event, context) => {
           dynamoData.Event = record;
           dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
           console.info('🚀 -> file: index.js:42 -> get -> Log Id:', get(dynamoData, 'Id', ''));
-          dynamoData.Process = 'SEND_ORDER_EVENTS';
+          dynamoData.Process = get(CONSTANTS, 'shipmentProcess.sendOrderEvents', '');
 
           const recordBody = JSON.parse(get(record, 'body', {}));
           const message = JSON.parse(get(recordBody, 'Message', ''));
@@ -154,7 +154,7 @@ module.exports.handler = async (event, context) => {
           dynamoData.Payload = JSON.stringify(payload);
           const token = await getLbnToken();
           dynamoData.Response = await sendOrderEventsLbn(token, payload);
-          dynamoData.Status = 'SUCCESS';
+          dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
           await putLogItem(dynamoData);
         } catch (error) {
           console.error('Error for orderNo: ', fileNumber);
@@ -225,7 +225,7 @@ module.exports.handler = async (event, context) => {
       statusCode: 200,
       body: JSON.stringify(
         {
-          Message: 'SUCCESS',
+          Message: get(CONSTANTS, 'statusVal.success', ''),
         },
         null,
         2
@@ -457,8 +457,8 @@ async function verifyIfEventAlreadySent(orderId) {
       },
       ExpressionAttributeValues: {
         ':FreightOrderId': orderId,
-        ':status': 'SUCCESS',
-        ':process': 'SEND_ORDER_EVENTS',
+        ':status': get(CONSTANTS, 'statusVal.success', ''),
+        ':process': get(CONSTANTS, 'shipmentProcess.sendOrderEvents', ''),
         ':OrderStatus': orderStatus,
       },
     };

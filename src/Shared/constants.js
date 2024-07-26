@@ -175,6 +175,19 @@ const CONSTANTS = {
     'WHITE': 'ADD_HANDL_DEST',
     'WSUR': 'HEAVY_WEIGHT',
   },
+  shipmentProcess: {
+    create: 'CREATE',
+    update: 'UPDATE',
+    cancel: 'CANCEL',
+    addTracking: 'ADD_TRACKING',
+    deleteAddTracking: 'DELETE_ADD_TRACKING',
+    sendOrderEvents: 'SEND_ORDER_EVENTS',
+    sendBillingInvoice: 'SEND_BILLING_INVOICE'
+  },
+  statusVal: {
+    success: 'SUCCESS',
+    failed: 'FAILED'
+  }
 };
 
 module.exports = {

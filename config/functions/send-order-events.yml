@@ -14,7 +14,7 @@ function:
   events:
     - sqs:
         arn: ${ssm:/omni/${self:provider.stage}/bio-rad/send-order-events/sqs.arn}
-        batchSize: 10
+        batchSize: 1
   environment:
     SHIPMENT_HEADER_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/shipment-header/ddb.tableName}
     REFERENCE_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/references/ddb.tableName}
