@@ -45,6 +45,7 @@ provider:
         - sqs:SendMessage
         - secretsmanager:*
         - sns:*
+        - ses:*
       Resource: '*'
   environment:
     REGION: ${self:custom.region}
