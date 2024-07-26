@@ -51,9 +51,9 @@ module.exports.handler = async (event, context) => {
           let data;
           const dynamoTableName = get(message, 'dynamoTableName', '');
           if (
-            dynamoTableName === `omni-wt-rt-apar-failure-${process.env.STAGE}` ||
-            dynamoTableName === `omni-wt-rt-shipment-milestone-${process.env.STAGE}` ||
-            dynamoTableName === `omni-wt-rt-shipment-file-data-${process.env.STAGE}`
+            dynamoTableName === process.env.APAR_FAILURE_TABLE ||
+            dynamoTableName === process.env.SHIPMENT_MILESTONE_TABLE ||
+            dynamoTableName === process.env.SHIPMENT_FILE_DATA_TABLE
           ) {
             data = AWS.DynamoDB.Converter.unmarshall(get(message, 'NewImage', {}));
             fileNumber = get(data, 'FK_OrderNo', '');
@@ -72,10 +72,10 @@ module.exports.handler = async (event, context) => {
 
             housebill = get(res, '[0].Housebill');
 
-            if (dynamoTableName === `omni-wt-rt-apar-failure-${process.env.STAGE}`) {
+            if (dynamoTableName === process.env.APAR_FAILURE_TABLE) {
               eventType = 'exceptions';
               orderStatus = get(data, 'FDCode', '');
-            } else if (dynamoTableName === `omni-wt-rt-shipment-file-data-${process.env.STAGE}`) {
+            } else if (dynamoTableName === process.env.SHIPMENT_FILE_DATA_TABLE) {
               if (get(data, 'CustomerAccess', '') !== 'Y') {
                 console.info('SKIPPING, There is no customer access for this document.');
                 throw new Error('SKIPPING, There is no customer access for this document.');

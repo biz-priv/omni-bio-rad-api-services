@@ -25,3 +25,8 @@ function:
     LBN_TOKEN_USERNAME: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/username}
     LBN_TOKEN_PASSWORD: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/password}
     LBN_TOKEN_AUTHORIZATION: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/authorization}
+    APAR_FAILURE_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/apar-failure/ddb.tableName}
+    SHIPMENT_MILESTONE_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/shipment-milestone/ddb.tableName}
+    SHIPMENT_FILE_DATA_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/shipment-file-data/ddb.tableName}
+    TRACKING_NOTES_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/tracking-notes/ddb.tableName}
+    TIMEZONE_MASTER_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/timezone-master/ddb.tableName}

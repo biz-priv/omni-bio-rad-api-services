@@ -478,7 +478,7 @@ async function cancelShipmentApiCall(housebill) {
 async function fetchTackingData(orderNo) {
   try {
     const params = {
-      TableName: 'omni-wt-rt-tracking-notes-dev',
+      TableName: process.env.TRACKING_NOTES_TABLE,
       IndexName: `omni-tracking-notes-orderNo-index-${process.env.STAGE}`,
       KeyConditionExpression: 'FK_OrderNo = :FK_OrderNo',
       ExpressionAttributeValues: {
@@ -535,7 +535,7 @@ async function modifyTime(dateTime) {
 async function getOffset(dateTime) {
   try {
     const params = {
-      TableName: 'omni-wt-rt-timezone-master-dev',
+      TableName: process.env.TIMEZONE_MASTER_TABLE,
       KeyConditionExpression: 'PK_TimeZoneCode = :PK_TimeZoneCode',
       ExpressionAttributeValues: {
         ':PK_TimeZoneCode': dateTime,
