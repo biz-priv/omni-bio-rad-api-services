@@ -37,7 +37,7 @@ module.exports.handler = async (event) => {
 };
 
 async function connectToSQLServer(query) {
-  const pool = new sql.ConnectionPool({
+  const config = {
     user: process.env.DB_USERNAME,
     password: process.env.DB_PASSWORD,
     server: process.env.DB_SERVER,
@@ -46,8 +46,7 @@ async function connectToSQLServer(query) {
     options: {
       trustServerCertificate: true,
     },
-})
-
+  };
 
   // const config = {
   //   user: process.env.DB_USERNAME,
@@ -59,16 +58,23 @@ async function connectToSQLServer(query) {
   //     trustServerCertificate: true,
   //   },
   // };
-
+  let pool;
   try {
-    await pool.connect()
-    // await sql.connect(config);
-    console.info('Connected to SQL Server');
-    const request = new sql.Request();
-    await request.query(query);
-    await pool.close()
+    pool = new sql.ConnectionPool(config);
+
+    await pool.connect();
+    console.log('Connected to the database successfully');
+
+    const result = await pool.request().query(query);
+
+    console.log('Query result:', result.recordset);
   } catch (err) {
     console.error('Error: ', err);
     throw err;
+  } finally {
+    // Close the connection pool if it was successfully created
+    if (pool) {
+      pool.close();
+    }
   }
 }
