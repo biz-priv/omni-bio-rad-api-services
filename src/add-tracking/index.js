@@ -1,7 +1,7 @@
 'use strict';
 
 const { get } = require('lodash');
-const { putLogItem, getData } = require('../Shared/dynamo');
+const { putLogItem } = require('../Shared/dynamo');
 const uuid = require('uuid');
 const moment = require('moment-timezone');
 const { querySourceDb, sendSESEmail } = require('../Shared/dataHelper');
@@ -28,42 +28,6 @@ module.exports.handler = async (event, context) => {
     dynamoData.TechnicalId = get(eventBody, 'technicalId', '');
     dynamoData.Housebill = [];
 
-    const Params = {
-      TableName: process.env.LOGS_TABLE,
-      IndexName: 'FreightOrderId-Index',
-      KeyConditionExpression: 'FreightOrderId = :FreightOrderId',
-      FilterExpression: '#status = :status AND #process = :process',
-      ExpressionAttributeNames: {
-        '#status': 'Status',
-        '#process': 'Process',
-      },
-      ExpressionAttributeValues: {
-        ':FreightOrderId': get(dynamoData, 'FreightOrderId', ''),
-        ':status': get(CONSTANTS, 'statusVal.success', ''),
-        ':process': get(CONSTANTS, 'shipmentProcess.addTracking', ''),
-      },
-    };
-
-    const Result = await getData(Params);
-    console.info('🚀 -> file: index.js:49 -> module.exports.handler= -> Result:', Result);
-    if (Result.length > 0) {
-      dynamoData.Status = 'SKIPPING';
-      dynamoData.ErrorMsg =
-        'Duplicate tracking request. We alread received the tracking data for this freight order id';
-      await putLogItem(dynamoData);
-      return {
-        statusCode: 400,
-        body: JSON.stringify(
-          {
-            responseId: dynamoData.Id,
-            message:
-              'Duplicate tracking request. We alread received the tracking for this freight order id',
-          },
-          null,
-          2
-        ),
-      };
-    }
 
     const stops = get(eventBody, 'shipment.stops', '');
 
