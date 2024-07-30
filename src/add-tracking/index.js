@@ -20,14 +20,16 @@ module.exports.handler = async (event, context) => {
     dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
     dynamoData.Event = get(event, 'body', '');
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
-    console.info('🚀 -> file: index.js:25 -> module.exports.handler= -> Log Id:', get(dynamoData, 'Id', ''));
+    console.info(
+      '🚀 -> file: index.js:25 -> module.exports.handler= -> Log Id:',
+      get(dynamoData, 'Id', '')
+    );
     dynamoData.Process = get(CONSTANTS, 'shipmentProcess.addTracking', '');
     dynamoData.FreightOrderId = get(eventBody, 'shipment.orderId', '');
     dynamoData.OrderingPartyLbnId = get(eventBody, 'shipper.shipperLBNID', '');
     dynamoData.CarrierPartyLbnId = get(eventBody, 'carrier.carrierLBNID', '');
     dynamoData.TechnicalId = get(eventBody, 'technicalId', '');
     dynamoData.Housebill = [];
-
 
     const stops = get(eventBody, 'shipment.stops', '');
 

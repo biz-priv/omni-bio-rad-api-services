@@ -20,7 +20,10 @@ module.exports.handler = async (event, context) => {
     dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss');
     dynamoData.Event = event;
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
-    console.info('🚀 -> file: index.js:25 -> module.exports.handler= -> Log Id:', get(dynamoData, 'Id', ''));
+    console.info(
+      '🚀 -> file: index.js:25 -> module.exports.handler= -> Log Id:',
+      get(dynamoData, 'Id', '')
+    );
     dynamoData.Process = get(CONSTANTS, 'shipmentProcess.cancel', '');
     dynamoData.XmlPayload = {};
     dynamoData.XmlResponse = {};
@@ -120,7 +123,10 @@ module.exports.handler = async (event, context) => {
         });
         console.info('Notification has been sent');
       } catch (err) {
-        console.info('🚀 -> file: index.js:121 -> module.exports.handler= -> Error while sending error notification:', err);
+        console.info(
+          '🚀 -> file: index.js:121 -> module.exports.handler= -> Error while sending error notification:',
+          err
+        );
       }
     } else {
       errorMsgVal = errorMsgVal.split(',').slice(1);

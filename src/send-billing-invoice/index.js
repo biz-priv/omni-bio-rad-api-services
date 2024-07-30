@@ -22,78 +22,81 @@ module.exports.handler = async (event, context) => {
   try {
     console.info('Event: ', event);
 
-    await Promise.all(
-      get(event, 'Records', []).map(async (record) => {
-        let headerData;
-        let referencesData;
-        let freightOrderId;
-        let orderNo;
+    const record = get(event, 'Records[0]', []);
+    let headerData;
+    let referencesData;
+    let freightOrderId;
+    let orderNo;
+    let seqNo;
+    try {
+      console.info('record: ', record);
+
+      const cstDate = moment().tz('America/Chicago');
+      dynamoData.CSTDate = cstDate.format('YYYY-MM-DD');
+      dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
+      dynamoData.Event = record;
+      dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
+      console.info('🚀 -> file: index.js:38 -> get -> Log Id:', get(dynamoData, 'Id', ''));
+      dynamoData.Process = get(CONSTANTS, 'shipmentProcess.sendBillingInvoice', '');
+
+      const recordBody = JSON.parse(get(record, 'body', {}));
+      const message = JSON.parse(get(recordBody, 'Message', ''));
+
+      const newImage = AWS.DynamoDB.Converter.unmarshall(get(message, 'NewImage', {}));
+      if (
+        get(newImage, 'PostedDateTime', '').includes('1900') ||
+        get(newImage, 'PostedDateTime', '') === '' ||
+        get(newImage, 'PostedDateTime', '') === null
+      ) {
+        console.info('SKIPPING, This shipment is not yet posted');
+        throw new Error('SKIPPING, This shipment is not yet posted');
+      }
+      orderNo = get(newImage, 'FK_OrderNo', '');
+      seqNo = get(newImage, 'FK_OrderNo', '');
+      dynamoData.OrderNo = orderNo;
+      dynamoData.SeqNo = seqNo;
+      const verifyShipmentData = await verifyShipment(orderNo, seqNo);
+      freightOrderId = get(verifyShipmentData, 'freightOrderId', '');
+      headerData = get(verifyShipmentData, 'headerData', []);
+      referencesData = get(verifyShipmentData, 'referencesData', []);
+
+      dynamoData.FreightOrderId = freightOrderId;
+
+      if (!get(verifyShipmentData, 'validShipmentFlag', false)) {
+        console.info(
+          'SKIPPING, This shipment is not valid to process the shipment(either this is not belong to bio rad or freight order id is missing).'
+        );
+        throw new Error(
+          'SKIPPING, This shipment is not valid to process the shipment(either this is not belong to bio rad or freight order id is missing).'
+        );
+      }
+      const payload = await preparePayload(
+        newImage,
+        headerData,
+        referencesData,
+        freightOrderId,
+        seqNo
+      );
+      console.info('payload: ', JSON.stringify(payload));
+      const token = await getLbnToken();
+      dynamoData.Payload = await sendBillingInvoiceLbn(token, payload);
+      dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
+      await putLogItem(dynamoData);
+    } catch (error) {
+      console.error('Error for orderNo: ', orderNo, error);
+
+      let errorMsgVal = '';
+      if (get(error, 'message', null) !== null) {
+        errorMsgVal = get(error, 'message', '');
+      } else {
+        errorMsgVal = error;
+      }
+      let flag = get(errorMsgVal.split(','), '[0]', '');
+      if (flag !== 'SKIPPING') {
+        flag = get(CONSTANTS, 'statusVal.failed', '');
         try {
-          console.info('record: ', record);
-
-          const cstDate = moment().tz('America/Chicago');
-          dynamoData.CSTDate = cstDate.format('YYYY-MM-DD');
-          dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
-          dynamoData.Event = record;
-          dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
-          console.info('🚀 -> file: index.js:38 -> get -> Log Id:', get(dynamoData, 'Id', ''));
-          dynamoData.Process = get(CONSTANTS, 'shipmentProcess.sendBillingInvoice', '');
-
-          const recordBody = JSON.parse(get(record, 'body', {}));
-          const message = JSON.parse(get(recordBody, 'Message', ''));
-
-          const newImage = AWS.DynamoDB.Converter.unmarshall(get(message, 'NewImage', {}));
-          if (
-            get(newImage, 'PostedDateTime', '').includes('1900') ||
-            get(newImage, 'PostedDateTime', '') === '' ||
-            get(newImage, 'PostedDateTime', '') === null
-          ) {
-            console.info('SKIPPING, This shipment is not yet posted');
-            throw new Error('SKIPPING, This shipment is not yet posted');
-          }
-          orderNo = get(newImage, 'FK_OrderNo', '');
-          const verifyShipmentData = await verifyShipment(get(newImage, 'FK_OrderNo', ''));
-          freightOrderId = get(verifyShipmentData, 'freightOrderId', '');
-          headerData = get(verifyShipmentData, 'headerData', []);
-          referencesData = get(verifyShipmentData, 'referencesData', []);
-
-          dynamoData.FreightOrderId = freightOrderId;
-          dynamoData.OrderNo = orderNo;
-
-          if (!get(verifyShipmentData, 'validShipmentFlag', false)) {
-            console.info(
-              'SKIPPING, This shipment is not valid to process the shipment(either this is not belong to bio rad or freight order id is missing).'
-            );
-            throw new Error(
-              'SKIPPING, This shipment is not valid to process the shipment(either this is not belong to bio rad or freight order id is missing).'
-            );
-          }
-          const payload = await preparePayload(
-            newImage,
-            headerData,
-            referencesData,
-            freightOrderId
-          );
-          console.info('payload: ', JSON.stringify(payload));
-          const token = await getLbnToken();
-          dynamoData.Payload = await sendBillingInvoiceLbn(token, payload);
-          dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
-          await putLogItem(dynamoData);
-        } catch (error) {
-          console.error('Error for orderNo: ', orderNo, error);
-
-          let errorMsgVal = '';
-          if (get(error, 'message', null) !== null) {
-            errorMsgVal = get(error, 'message', '');
-          } else {
-            errorMsgVal = error;
-          }
-          let flag = get(errorMsgVal.split(','), '[0]', '');
-          if (flag !== 'SKIPPING') {
-            flag = get(CONSTANTS, 'statusVal.failed', '');
-            try {
-              await sendSESEmail({
-                message: `
+          await sendSESEmail({
+            message: `
                   <!DOCTYPE html>
                   <html>
                   <head>
@@ -128,21 +131,22 @@ module.exports.handler = async (event, context) => {
                   </body>
                   </html>
                 `,
-                subject: `Bio Rad Send Billing Invoice ${process.env.STAGE} ERROR`,
-              });
-              console.info('Notification has been sent');
-            } catch (err) {
-              console.info('🚀 -> file: index.js:133 -> get -> Error while sending error notification:', err);
-            }
-          } else {
-            errorMsgVal = get(errorMsgVal.split(','), '[1]', '');
-          }
-          dynamoData.ErrorMsg = errorMsgVal;
-          dynamoData.Status = flag;
-          await putLogItem(dynamoData);
+            subject: `Bio Rad Send Billing Invoice ${process.env.STAGE} ERROR`,
+          });
+          console.info('Notification has been sent');
+        } catch (err) {
+          console.info(
+            '🚀 -> file: index.js:133 -> get -> Error while sending error notification:',
+            err
+          );
         }
-      })
-    );
+      } else {
+        errorMsgVal = get(errorMsgVal.split(','), '[1]', '');
+      }
+      dynamoData.ErrorMsg = errorMsgVal;
+      dynamoData.Status = flag;
+      await putLogItem(dynamoData);
+    }
     return {
       statusCode: 200,
       body: JSON.stringify(
@@ -169,15 +173,16 @@ module.exports.handler = async (event, context) => {
   }
 };
 
-async function preparePayload(newImage, headerData, referencesData, freightOrderId) {
+async function preparePayload(newImage, headerData, referencesData, freightOrderId, seqNo) {
   try {
     const aparParams = {
       TableName: process.env.SHIPMENT_APAR_TABLE,
       KeyConditionExpression: 'FK_OrderNo = :PK_OrderNo',
-      FilterExpression: 'APARCode = :APARCode',
+      FilterExpression: 'APARCode = :APARCode AND SeqNo = :SeqNo',
       ExpressionAttributeValues: {
         ':PK_OrderNo': get(newImage, 'FK_OrderNo', ''),
         ':APARCode': 'C',
+        ':SeqNo': seqNo,
       },
     };
     const aparData = await getData(aparParams);
@@ -185,8 +190,11 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
     const grossAmount = aparData
       .filter((obj) => obj.InvoiceSeqNo === get(newImage, 'InvoiceSeqNo', ''))
       .reduce((sum, item) => sum + Number(get(item, 'Total', 0)), 0);
-    if (grossAmount === 0) {
-      throw new Error(`SKIPPING, This shipment doesn't have any charges: ${freightOrderId}`);
+    dynamoData.GrossAmount = grossAmount;
+    if (grossAmount <= 0) {
+      throw new Error(
+        `SKIPPING, This bill doesn't have any charges or charges are in negative: ${freightOrderId}`
+      );
     }
 
     console.info('reference data: ', referencesData);
@@ -280,7 +288,7 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
   }
 }
 
-async function verifyShipment(orderNo) {
+async function verifyShipment(orderNo, seqNo) {
   try {
     const headerParams = {
       TableName: process.env.SHIPMENT_HEADER_TABLE,
@@ -327,15 +335,17 @@ async function verifyShipment(orderNo) {
       TableName: process.env.LOGS_TABLE,
       IndexName: 'FreightOrderId-Index',
       KeyConditionExpression: 'FreightOrderId = :FreightOrderId',
-      FilterExpression: '#status = :status AND #process = :process',
+      FilterExpression: '#status = :status AND #process = :process AND #SeqNo = :SeqNo',
       ExpressionAttributeNames: {
         '#status': 'Status',
         '#process': 'Process',
+        '#SeqNo': 'SeqNo',
       },
       ExpressionAttributeValues: {
         ':FreightOrderId': freightOrderId,
         ':status': get(CONSTANTS, 'statusVal.success', ''),
         ':process': get(CONSTANTS, 'shipmentProcess.sendBillingInvoice', ''),
+        ':SeqNo': seqNo,
       },
     };
 

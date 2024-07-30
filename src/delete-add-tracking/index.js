@@ -21,7 +21,10 @@ module.exports.handler = async (event, context) => {
     dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
     dynamoData.Event = get(event, 'body', '');
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
-    console.info('🚀 -> file: index.js:24 -> module.exports.handler= -> Log Id:', get(dynamoData, 'Id', ''));
+    console.info(
+      '🚀 -> file: index.js:24 -> module.exports.handler= -> Log Id:',
+      get(dynamoData, 'Id', '')
+    );
     dynamoData.Process = get(CONSTANTS, 'shipmentProcess.deleteAddTracking', '');
     dynamoData.OrderingPartyLbnId = get(eventBody, 'shipper.shipperLBNID', '');
     dynamoData.CarrierPartyLbnId = get(eventBody, 'carrier.carrierLBNID', '');
@@ -41,7 +44,10 @@ module.exports.handler = async (event, context) => {
       ),
     };
   } catch (error) {
-    console.info('🚀 -> file: index.js:44 -> module.exports.handler= -> Main handler error:', error);
+    console.info(
+      '🚀 -> file: index.js:44 -> module.exports.handler= -> Main handler error:',
+      error
+    );
     try {
       await sendSESEmail({
         message: `

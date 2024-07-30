@@ -20,7 +20,7 @@ const { CONSTANTS } = require('../Shared/constants');
 const dynamoData = {};
 
 module.exports.handler = async (event, context) => {
-console.info('🚀 -> file: index.js:22 -> module.exports.handler= -> event:', event);
+  console.info('🚀 -> file: index.js:22 -> module.exports.handler= -> event:', event);
   try {
     const eventBody = JSON.parse(get(event, 'body', {}));
 
@@ -49,8 +49,15 @@ console.info('🚀 -> file: index.js:22 -> module.exports.handler= -> event:', e
       };
 
       const Result = await getData(Params);
-      initialRecord = Result.filter((obj) => obj.Process === get(CONSTANTS, 'shipmentProcess.create', '') && obj.Status === get(CONSTANTS, 'statusVal.success', ''));
-      console.info('🚀 -> file: index.js:52 -> module.exports.handler= -> initialRecord:', initialRecord);
+      initialRecord = Result.filter(
+        (obj) =>
+          obj.Process === get(CONSTANTS, 'shipmentProcess.create', '') &&
+          obj.Status === get(CONSTANTS, 'statusVal.success', '')
+      );
+      console.info(
+        '🚀 -> file: index.js:52 -> module.exports.handler= -> initialRecord:',
+        initialRecord
+      );
     } else {
       throw new Error(
         'Error, FreightOrderId is missing in the request, please add the details in the request.'
@@ -61,7 +68,10 @@ console.info('🚀 -> file: index.js:22 -> module.exports.handler= -> event:', e
     dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
     dynamoData.Event = JSON.stringify(eventBody);
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
-    console.info('🚀 -> file: index.js:63 -> module.exports.handler= -> Log Id:', get(dynamoData, 'Id', ''));
+    console.info(
+      '🚀 -> file: index.js:63 -> module.exports.handler= -> Log Id:',
+      get(dynamoData, 'Id', '')
+    );
     dynamoData.Process = get(CONSTANTS, 'shipmentProcess.update', '');
     dynamoData.FreightOrderId = get(event, 'pathParameters.freightOrderId', '');
     dynamoData.OrderingPartyLbnId = get(event, 'pathParameters.orderingPartyLbnId', '');
@@ -307,7 +317,10 @@ console.info('🚀 -> file: index.js:22 -> module.exports.handler= -> event:', e
         });
         console.info('Notification has been sent');
       } catch (err) {
-        console.info('🚀 -> file: index.js:312 -> module.exports.handler= -> Error while sending error notification:', err);
+        console.info(
+          '🚀 -> file: index.js:312 -> module.exports.handler= -> Error while sending error notification:',
+          err
+        );
       }
     } else {
       errorMsgVal = errorMsgVal.split(',').slice(1);

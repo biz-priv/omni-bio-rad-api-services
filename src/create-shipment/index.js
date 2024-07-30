@@ -44,7 +44,10 @@ module.exports.handler = async (event, context) => {
     dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
     dynamoData.Event = JSON.stringify(eventBody);
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
-    console.info('🚀 -> file: index.js:48 -> module.exports.handler= -> Log Id:', get(dynamoData, 'Id', ''));
+    console.info(
+      '🚀 -> file: index.js:48 -> module.exports.handler= -> Log Id:',
+      get(dynamoData, 'Id', '')
+    );
     dynamoData.Process = get(CONSTANTS, 'shipmentProcess.create', '');
     dynamoData.FreightOrderId = get(eventBody, 'freightOrderId', '');
     dynamoData.OrderingPartyLbnId = get(eventBody, 'orderingPartyLbnId', '');
@@ -94,7 +97,10 @@ module.exports.handler = async (event, context) => {
       };
 
       const logDataResult = await getData(logDataParams);
-      console.info('🚀 -> file: index.js:98 -> module.exports.handler= -> logDataResult:', logDataResult);
+      console.info(
+        '🚀 -> file: index.js:98 -> module.exports.handler= -> logDataResult:',
+        logDataResult
+      );
       if (logDataResult.length > 0) {
         throw new Error(
           `Error, Shipments already created for the provided freight order Id: ${get(dynamoData, 'FreightOrderId', '')}`
@@ -169,13 +175,22 @@ module.exports.handler = async (event, context) => {
           loadingStage,
           unloadingStage
         );
-        console.info('🚀 -> file: index.js:208 -> groupedItemKeys.map -> shipperAndConsignee:', shipperAndConsignee);
+        console.info(
+          '🚀 -> file: index.js:208 -> groupedItemKeys.map -> shipperAndConsignee:',
+          shipperAndConsignee
+        );
 
         const referenceList = await prepareReferenceList(loadingStage, unloadingStage, dynamoData);
-        console.info('🚀 -> file: index.js:176 -> groupedItemKeys.map -> referenceList:', JSON.stringify(referenceList));
+        console.info(
+          '🚀 -> file: index.js:176 -> groupedItemKeys.map -> referenceList:',
+          JSON.stringify(referenceList)
+        );
 
         const shipmentLineList = await prepareShipmentLineListDate(get(groupedItems, key, []));
-        console.info('🚀 -> file: index.js:179 -> groupedItemKeys.map -> shipmentLineList:', JSON.stringify(shipmentLineList));
+        console.info(
+          '🚀 -> file: index.js:179 -> groupedItemKeys.map -> shipmentLineList:',
+          JSON.stringify(shipmentLineList)
+        );
 
         const dateValues = await prepareDateValues(
           loadingStage,
@@ -195,7 +210,10 @@ module.exports.handler = async (event, context) => {
         return { ...payloads, stopId: key };
       })
     );
-    console.info('🚀 -> file: index.js:199 -> module.exports.handler= -> wtPayloadsData:', wtPayloadsData);
+    console.info(
+      '🚀 -> file: index.js:199 -> module.exports.handler= -> wtPayloadsData:',
+      wtPayloadsData
+    );
 
     // Send the payloads to world trak for shipment creation one by one as it doesn't allow conurrent executions.
     for (const data of wtPayloadsData) {
@@ -281,7 +299,10 @@ module.exports.handler = async (event, context) => {
       ),
     };
   } catch (error) {
-    console.info('🚀 -> file: index.js:285 -> module.exports.handler= -> Main handler error:', error);
+    console.info(
+      '🚀 -> file: index.js:285 -> module.exports.handler= -> Main handler error:',
+      error
+    );
 
     let errorMsgVal = '';
     if (get(error, 'message', null) !== null) {
@@ -332,7 +353,10 @@ module.exports.handler = async (event, context) => {
         });
         console.info('Notification has been sent');
       } catch (err) {
-        console.info('🚀 -> file: index.js:335 -> module.exports.handler= -> Error while sending error notification:', err);
+        console.info(
+          '🚀 -> file: index.js:335 -> module.exports.handler= -> Error while sending error notification:',
+          err
+        );
       }
     } else {
       errorMsgVal = errorMsgVal.split(',').slice(1);

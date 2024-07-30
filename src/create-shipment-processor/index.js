@@ -15,9 +15,11 @@ const { CONSTANTS } = require('../Shared/constants');
 let dynamoData;
 
 module.exports.handler = async (event, context) => {
-  console.info('🚀 -> file: index.js:17 -> module.exports.handler= -> event:', JSON.stringify(event));
+  console.info(
+    '🚀 -> file: index.js:17 -> module.exports.handler= -> event:',
+    JSON.stringify(event)
+  );
   try {
-
     const records = get(event, 'Records', []);
 
     await Promise.all(
@@ -73,8 +75,6 @@ module.exports.handler = async (event, context) => {
         };
         console.info('🚀 -> file: index.js:73 -> records.map -> payload:', payload);
 
-        dynamoData.LbnPayload = payload;
-
         const token = await getLbnToken();
         await sendToLbn(token, payload, dynamoData);
         dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
@@ -93,7 +93,10 @@ module.exports.handler = async (event, context) => {
       ),
     };
   } catch (error) {
-    console.info('🚀 -> file: index.js:95 -> module.exports.handler= -> Main handler error:', error);
+    console.info(
+      '🚀 -> file: index.js:95 -> module.exports.handler= -> Main handler error:',
+      error
+    );
 
     let errorMsgVal = '';
     if (get(error, 'message', null) !== null) {
@@ -144,7 +147,10 @@ module.exports.handler = async (event, context) => {
         });
         console.info('Notification has been sent');
       } catch (err) {
-        console.info('🚀 -> file: index.js:145 -> module.exports.handler= -> Error while sending error notification:', err);
+        console.info(
+          '🚀 -> file: index.js:145 -> module.exports.handler= -> Error while sending error notification:',
+          err
+        );
       }
     } else {
       errorMsgVal = errorMsgVal.split(',').slice(1);

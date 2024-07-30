@@ -20,7 +20,10 @@ const cstDate = moment().tz('America/Chicago');
 let dynamoData;
 
 module.exports.handler = async (event, context) => {
-  console.info('🚀 -> file: index.js:21 -> module.exports.handler= -> event:', JSON.stringify(event));
+  console.info(
+    '🚀 -> file: index.js:21 -> module.exports.handler= -> event:',
+    JSON.stringify(event)
+  );
 
   try {
     const records = get(event, 'Records', []);
@@ -40,9 +43,14 @@ module.exports.handler = async (event, context) => {
 
         const Result = await getData(Params);
         const CreateDynamoData = Result.filter(
-          (obj) => obj.Process === get(CONSTANTS, 'shipmentProcess.create', '') && obj.Status === get(CONSTANTS, 'statusVal.success', '')
+          (obj) =>
+            obj.Process === get(CONSTANTS, 'shipmentProcess.create', '') &&
+            obj.Status === get(CONSTANTS, 'statusVal.success', '')
         )[0];
-        console.info('🚀 -> file: index.js:43 -> records.map -> CreateDynamoData:', CreateDynamoData);
+        console.info(
+          '🚀 -> file: index.js:43 -> records.map -> CreateDynamoData:',
+          CreateDynamoData
+        );
 
         const shipmentUpdates = get(dynamoData, 'ShipmentUpdates', []);
         CreateDynamoData.ShipmentDetails = {};
@@ -51,7 +59,10 @@ module.exports.handler = async (event, context) => {
 
         for (const housebillToDelete of get(dynamoData, 'HousebillsToDelete', [])) {
           const data = await cancelShipmentApiCall(housebillToDelete);
-          console.info('🚀 -> file: index.js:52 -> records.map -> data after cancelling shipment:', data);
+          console.info(
+            '🚀 -> file: index.js:52 -> records.map -> data after cancelling shipment:',
+            data
+          );
         }
 
         for (const data of shipmentUpdates) {
@@ -128,7 +139,10 @@ module.exports.handler = async (event, context) => {
         }
 
         const fileNumberArray = get(dynamoData, 'FileNumber');
-        console.info('🚀 -> file: index.js:129 -> records.map -> fileNumberArray:', fileNumberArray);
+        console.info(
+          '🚀 -> file: index.js:129 -> records.map -> fileNumberArray:',
+          fileNumberArray
+        );
 
         const updateQuery = `update tbl_shipmentheader set
             CallInPhone='${get(dynamoData, 'CallInPhone', '')}',
@@ -202,7 +216,10 @@ module.exports.handler = async (event, context) => {
       ),
     };
   } catch (error) {
-    console.info('🚀 -> file: index.js:204 -> module.exports.handler= -> Main handler error:', error);
+    console.info(
+      '🚀 -> file: index.js:204 -> module.exports.handler= -> Main handler error:',
+      error
+    );
 
     let errorMsgVal = '';
     if (get(error, 'message', null) !== null) {
