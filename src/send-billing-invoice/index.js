@@ -78,6 +78,11 @@ module.exports.handler = async (event, context) => {
         invoiceSeqNo
       );
       console.info('payload: ', JSON.stringify(payload));
+      if (get(payload, 'attachments[0].fileContentBinaryObject', '') === '') {
+        throw new Error(
+          `Invoice document not found for housebill: ${get(payload, 'carrierInvoiceID', '')}.`
+        );
+      }
       const token = await getLbnToken();
       dynamoData.Payload = await sendBillingInvoiceLbn(token, payload);
       dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
