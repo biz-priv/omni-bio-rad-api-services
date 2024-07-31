@@ -27,7 +27,7 @@ module.exports.handler = async (event, context) => {
     let referencesData;
     let freightOrderId;
     let orderNo;
-    let seqNo;
+    let invoiceSeqNo;
     try {
       console.info('record: ', record);
 
@@ -52,10 +52,10 @@ module.exports.handler = async (event, context) => {
         throw new Error('SKIPPING, This shipment is not yet posted');
       }
       orderNo = get(newImage, 'FK_OrderNo', '');
-      seqNo = get(newImage, 'FK_OrderNo', '');
+      invoiceSeqNo = get(newImage, 'InvoiceSeqNo', '');
       dynamoData.OrderNo = orderNo;
-      dynamoData.SeqNo = seqNo;
-      const verifyShipmentData = await verifyShipment(orderNo, seqNo);
+      dynamoData.InvoiceSeqNo = invoiceSeqNo;
+      const verifyShipmentData = await verifyShipment(orderNo, invoiceSeqNo);
       freightOrderId = get(verifyShipmentData, 'freightOrderId', '');
       headerData = get(verifyShipmentData, 'headerData', []);
       referencesData = get(verifyShipmentData, 'referencesData', []);
@@ -75,7 +75,7 @@ module.exports.handler = async (event, context) => {
         headerData,
         referencesData,
         freightOrderId,
-        seqNo
+        invoiceSeqNo
       );
       console.info('payload: ', JSON.stringify(payload));
       const token = await getLbnToken();
@@ -173,16 +173,16 @@ module.exports.handler = async (event, context) => {
   }
 };
 
-async function preparePayload(newImage, headerData, referencesData, freightOrderId, seqNo) {
+async function preparePayload(newImage, headerData, referencesData, freightOrderId, invoiceSeqNo) {
   try {
     const aparParams = {
       TableName: process.env.SHIPMENT_APAR_TABLE,
       KeyConditionExpression: 'FK_OrderNo = :PK_OrderNo',
-      FilterExpression: 'APARCode = :APARCode AND SeqNo = :SeqNo',
+      FilterExpression: 'APARCode = :APARCode AND InvoiceSeqNo = :InvoiceSeqNo',
       ExpressionAttributeValues: {
         ':PK_OrderNo': get(newImage, 'FK_OrderNo', ''),
         ':APARCode': 'C',
-        ':SeqNo': seqNo,
+        ':InvoiceSeqNo': invoiceSeqNo,
       },
     };
     const aparData = await getData(aparParams);
@@ -288,7 +288,7 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
   }
 }
 
-async function verifyShipment(orderNo, seqNo) {
+async function verifyShipment(orderNo, invoiceSeqNo) {
   try {
     const headerParams = {
       TableName: process.env.SHIPMENT_HEADER_TABLE,
@@ -335,17 +335,17 @@ async function verifyShipment(orderNo, seqNo) {
       TableName: process.env.LOGS_TABLE,
       IndexName: 'FreightOrderId-Index',
       KeyConditionExpression: 'FreightOrderId = :FreightOrderId',
-      FilterExpression: '#status = :status AND #process = :process AND #SeqNo = :SeqNo',
+      FilterExpression:
+        '#status = :status AND #process = :process AND InvoiceSeqNo = :InvoiceSeqNo',
       ExpressionAttributeNames: {
         '#status': 'Status',
         '#process': 'Process',
-        '#SeqNo': 'SeqNo',
       },
       ExpressionAttributeValues: {
         ':FreightOrderId': freightOrderId,
         ':status': get(CONSTANTS, 'statusVal.success', ''),
         ':process': get(CONSTANTS, 'shipmentProcess.sendBillingInvoice', ''),
-        ':SeqNo': seqNo,
+        ':InvoiceSeqNo': invoiceSeqNo,
       },
     };
 

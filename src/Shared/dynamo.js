@@ -7,8 +7,20 @@ const ddb = new AWS.DynamoDB.DocumentClient();
 
 async function getData(params) {
   try {
-    const data = await ddb.query(params).promise();
-    return get(data, 'Items', []);
+    let queryResults = [];
+    let items;
+    try {
+      do {
+        console.info('dbRead > params ', params);
+        items = await ddb.query(params).promise();
+        queryResults = queryResults.concat(get(items, 'Items', []));
+        params.ExclusiveStartKey = get(items, 'LastEvaluatedKey');
+      } while (typeof items.LastEvaluatedKey !== 'undefined');
+    } catch (e) {
+      console.error('DynamoDb query error. ', ' Params: ', params, ' Error: ', e);
+      throw e;
+    }
+    return queryResults;
   } catch (err) {
     console.info('getData:', err);
     throw err;
