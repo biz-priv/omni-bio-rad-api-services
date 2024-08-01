@@ -1,0 +1,21 @@
+---
+function:
+  name: omni-bio-rad-create-shipment-${self:provider.stage}
+  handler: src/create-shipment/index.handler
+  runtime: nodejs20.x
+  timeout: 30
+  layers:
+    - { Ref: NodeModulesLambdaLayer }
+  package:
+    patterns:
+      - '!**/*'
+      - src/create-shipment/**
+      - src/Shared/**
+  events:
+    - http:
+        path: /LbnFreightOrderForSubcontracting
+        method: POST
+        private: true
+  environment:
+    WT_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/wt/create-shipment/api.url}
+    UPLOAD_DOCUMENT_API: ${ssm:/omni/${self:provider.stage}/bio-rad/wt/add-document/api.url}

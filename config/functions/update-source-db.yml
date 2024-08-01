@@ -1,0 +1,23 @@
+---
+function:
+  name: omni-bio-rad-update-source-db-${self:provider.stage}
+  handler: src/update-source-db/index.handler
+  runtime: nodejs20.x
+  timeout: 30
+  layers:
+    - { Ref: NodeModulesLambdaLayer }
+  package:
+    patterns:
+      - '!**/*'
+      - src/update-source-db/**
+  events:
+    - http:
+        path: /updateSourceDb
+        method: POST
+        private: true
+  environment:
+    DB_USERNAME: ${ssm:/omni-dw/${self:provider.stage}/worldTrak/source-db/userName}
+    DB_PASSWORD: ${ssm:/omni-dw/${self:provider.stage}/worldTrak/source-db/password}
+    DB_SERVER: ${ssm:/omni-dw/${self:provider.stage}/worldTrak/source-db/serverName}
+    DB_PORT: ${ssm:/omni-dw/${self:provider.stage}/worldTrak/source-db/port}
+    DB_DATABASE: ${ssm:/omni-dw/${self:provider.stage}/worldTrak/source-db/name}
