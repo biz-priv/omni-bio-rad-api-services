@@ -54,8 +54,8 @@ provider:
     LOGS_TABLE: ${ssm:/omni/${self:provider.stage}/bio-rad/ddb.tableName}
 
   apiGateway:
-    ${self:provider.stage}-apiKeys-${self:provider.stage}:
-      - name: x-api-key
+    apiKeys:
+      - name: x-api-key-bioRad-${self:provider.stage}
         value: ${ssm:/omni/${self:provider.stage}/bio-rad/api-key}
         description: 'API key for bio rad ${self:custom.stage} apis'
 
