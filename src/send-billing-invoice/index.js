@@ -77,6 +77,7 @@ module.exports.handler = async (event, context) => {
         freightOrderId,
         invoiceSeqNo
       );
+      dynamoData.Payload = JSON.stringify(payload)
       console.info('payload: ', JSON.stringify(payload));
       if (get(payload, 'attachments[0].fileContentBinaryObject', '') === '') {
         throw new Error(
@@ -84,7 +85,7 @@ module.exports.handler = async (event, context) => {
         );
       }
       const token = await getLbnToken();
-      dynamoData.Payload = await sendBillingInvoiceLbn(token, payload);
+      await sendBillingInvoiceLbn(token, payload);
       dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
       await putLogItem(dynamoData);
     } catch (error) {
