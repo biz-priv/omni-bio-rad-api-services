@@ -55,7 +55,7 @@ provider:
 
   apiGateway:
     apiKeys:
-      - name: x-api-key
+      - name: x-api-key-bioRad-${self:provider.stage}
         value: ${ssm:/omni/${self:provider.stage}/bio-rad/api-key}
         description: 'API key for bio rad ${self:custom.stage} apis'
 
