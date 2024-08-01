@@ -24,8 +24,7 @@ let orderStatus;
 
 module.exports.handler = async (event, context) => {
   try {
-    console.info(event);
-    // const record = get(event, 'Records[2]', {});
+    console.info('Event: ', JSON.stringify(event));
 
     const record = get(event, 'Records[0]', []);
     orderStatus = '';

@@ -10,7 +10,7 @@ const { CONSTANTS } = require('../Shared/constants');
 const dynamoData = {};
 
 module.exports.handler = async (event, context) => {
-  console.info('🚀 -> file: index.js:13 -> module.exports.handler= -> event:', event);
+  console.info('🚀 -> file: index.js:13 -> module.exports.handler= -> event:', JSON.stringify(event));
   try {
     const eventBody = JSON.parse(get(event, 'body', {}));
     console.info('🚀 -> file: index.js:16 -> module.exports.handler= -> eventBody:', eventBody);

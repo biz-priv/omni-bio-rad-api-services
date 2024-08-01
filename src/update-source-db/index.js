@@ -5,7 +5,7 @@ const { get } = require('lodash');
 
 module.exports.handler = async (event) => {
   try {
-    console.info(event);
+    console.info('Event: ', JSON.stringify(event));
 
     const eventBody = JSON.parse(get(event, 'body', {}));
     const query = eventBody.query;
@@ -48,16 +48,6 @@ async function connectToSQLServer(query) {
     },
   };
 
-  // const config = {
-  //   user: process.env.DB_USERNAME,
-  //   password: process.env.DB_PASSWORD,
-  //   server: process.env.DB_SERVER,
-  //   port: Number(process.env.DB_PORT),
-  //   database: process.env.DB_DATABASE,
-  //   options: {
-  //     trustServerCertificate: true,
-  //   },
-  // };
   let pool;
   try {
     pool = new sql.ConnectionPool(config);

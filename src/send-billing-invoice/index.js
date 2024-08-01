@@ -20,7 +20,7 @@ const dynamoData = {};
 
 module.exports.handler = async (event, context) => {
   try {
-    console.info('Event: ', event);
+    console.info('Event: ', JSON.stringify(event));
 
     const record = get(event, 'Records[0]', []);
     let headerData;
@@ -193,9 +193,9 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
     };
     const aparData = await getData(aparParams);
     console.info('apar data: ', aparData);
-    const grossAmount = aparData
+    const grossAmount = (aparData
       .filter((obj) => obj.InvoiceSeqNo === get(newImage, 'InvoiceSeqNo', ''))
-      .reduce((sum, item) => sum + Number(get(item, 'Total', 0)), 0);
+      .reduce((sum, item) => sum + Number(get(item, 'Total', 0)), 0)).toFixed(3);
     dynamoData.GrossAmount = grossAmount;
     if (grossAmount <= 0) {
       throw new Error(
@@ -242,9 +242,9 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
         if (Number(get(element, 'Total', 0)) !== 0) {
           pricingElements.push({
             lbnChargeCode,
-            rateAmount: Number(get(element, 'Total', 0)),
+            rateAmount: Number(get(element, 'Total', 0)).toFixed(3),
             rateAmountCurrency: 'USD',
-            finalAmount: Number(get(element, 'Total', 0)),
+            finalAmount: Number(get(element, 'Total', 0)).toFixed(3),
             finalAmountCurrency: 'USD',
           });
         }
