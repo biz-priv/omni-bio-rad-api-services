@@ -1,0 +1,30 @@
+---
+function:
+  name: omni-bio-rad-send-billing-invoice-${self:provider.stage}
+  handler: src/send-billing-invoice/index.handler
+  runtime: nodejs20.x
+  timeout: 900
+  tags:
+    Name: send billing invoice
+  layers:
+    - { Ref: NodeModulesLambdaLayer }
+  package:
+    patterns:
+      - '!**/*'
+      - src/send-billing-invoice/**
+      - src/Shared/**
+  events:
+    - sqs:
+        arn: ${ssm:/omni/${self:provider.stage}/bio-rad/send-billing-invoice/sqs.arn}
+        batchSize: 1
+  environment:
+    LBN_TOKEN_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint}
+    LBN_TOKEN_USERNAME: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/username}
+    LBN_TOKEN_PASSWORD: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/password}
+    BIO_RAD_BILL_TO_NUMBERS: ${ssm:/omni/${self:provider.stage}/bio-rad/bill-to/numbers}
+    GET_DOCUMENT_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/wt/get-document/api.url}
+    LBN_BILLING_INVOICE_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-send-billing-invoice-endpoint}
+    SHIPMENT_HEADER_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/shipment-header/ddb.tableName}
+    REFERENCE_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/references/ddb.tableName}
+    SHIPMENT_APAR_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/shipment-apar/ddb.tableName}
+    LBN_TOKEN_AUTHORIZATION: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/authorization}

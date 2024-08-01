@@ -1,0 +1,32 @@
+---
+function:
+  name: omni-bio-rad-send-order-events-${self:provider.stage}
+  handler: src/send-order-events/index.handler
+  runtime: nodejs20.x
+  timeout: 900
+  layers:
+    - { Ref: NodeModulesLambdaLayer }
+  package:
+    patterns:
+      - '!**/*'
+      - src/send-order-events/**
+      - src/Shared/**
+  events:
+    - sqs:
+        arn: ${ssm:/omni/${self:provider.stage}/bio-rad/send-order-events/sqs.arn}
+        batchSize: 1
+  environment:
+    SHIPMENT_HEADER_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/shipment-header/ddb.tableName}
+    REFERENCE_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/references/ddb.tableName}
+    BIO_RAD_BILL_TO_NUMBERS: ${ssm:/omni/${self:provider.stage}/bio-rad/bill-to/numbers}
+    LBN_SEND_ORDER_EVENTS_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-send-order-events-endpoint}
+    GET_DOCUMENT_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/wt/get-document/api.url}
+    LBN_TOKEN_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint}
+    LBN_TOKEN_USERNAME: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/username}
+    LBN_TOKEN_PASSWORD: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/password}
+    LBN_TOKEN_AUTHORIZATION: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/authorization}
+    APAR_FAILURE_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/apar-failure/ddb.tableName}
+    SHIPMENT_MILESTONE_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/shipment-milestone/ddb.tableName}
+    SHIPMENT_FILE_DATA_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/shipment-file-data/ddb.tableName}
+    TRACKING_NOTES_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/tracking-notes/ddb.tableName}
+    TIMEZONE_MASTER_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/timezone-master/ddb.tableName}

@@ -1,0 +1,18 @@
+---
+function:
+  name: omni-bio-rad-delete-add-tracking-${self:provider.stage}
+  handler: src/delete-add-tracking/index.handler
+  runtime: nodejs20.x
+  timeout: 30
+  layers:
+    - { Ref: NodeModulesLambdaLayer }
+  package:
+    patterns:
+      - '!**/*'
+      - src/delete-add-tracking/**
+      - src/Shared/**
+  events:
+    - http:
+        path: /addTracking
+        method: DELETE
+        private: true

@@ -1,0 +1,22 @@
+---
+function:
+  name: omni-bio-rad-cancel-shipment-${self:provider.stage}
+  handler: src/cancel-shipment/index.handler
+  runtime: nodejs20.x
+  timeout: 30
+  layers:
+    - { Ref: NodeModulesLambdaLayer }
+  package:
+    patterns:
+      - '!**/*'
+      - src/cancel-shipment/**
+      - src/Shared/**
+  events:
+    - http:
+        path: /LbnFreightOrderForSubcontracting/{orderingPartyLbnId}/{originatorId}/{freightOrderId}/cancellation
+        method: POST
+        private: true
+  environment:
+    CANCEL_SHIPMENT_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/wt/add-document/api.url}
+    SHIPMENT_HEADER_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/shipment-header/ddb.tableName}
+    REFERENCE_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/references/ddb.tableName}

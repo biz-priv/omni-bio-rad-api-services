@@ -1,0 +1,96 @@
+service: omni-bio-rad-api-services
+
+provider:
+  name: aws
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  versionFunctions: false
+  tags: ${self:custom.tags}
+  stackTags: ${self:custom.tags}
+  runtime: nodejs20.x
+  vpc:
+    securityGroupIds:
+      - ${ssm:/omni-dw/${self:provider.stage}/lambda/sgId}
+    subnetIds:
+      - ${ssm:/omni-dw/${self:provider.stage}/lambda/subnetA}
+  iamRoleStatements:
+    - Effect: 'Allow'
+      Action:
+        - logs:CreateLogGroup
+        - logs:CreateLogStream
+        - logs:PutLogEvents
+        - ec2:CreateNetworkInterface
+        - ec2:DescribeNetworkInterfaces
+        - ec2:DetachNetworkInterface
+        - ec2:DeleteNetworkInterface
+        - ec2:AssignPrivateIpAddresses
+        - ec2:UnassignPrivateIpAddresses
+      Resource: '*'
+    - Effect: Allow
+      Action:
+        - s3:GetObject
+        - s3:ListBucket
+        - s3:PutObject
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:GetItem
+        - dynamodb:Query
+        - dynamodb:DeleteItem
+        - dynamodb:Scan
+        - sqs:GetQueueUrl
+        - sqs:GetQueueAttributes
+        - sqs:ReceiveMessage
+        - sqs:DeleteMessage
+        - sqs:SendMessageBatch
+        - sqs:SendMessage
+        - secretsmanager:*
+        - sns:*
+        - ses:*
+      Resource: '*'
+  environment:
+    REGION: ${self:custom.region}
+    STAGE: ${opt:stage, 'dev'}
+    NOTIFICATION_EMAILS: ${ssm:/omni/${self:provider.stage}/bio-rad/notification-email-list}
+    LOGS_TABLE: ${ssm:/omni/${self:provider.stage}/bio-rad/ddb.tableName}
+
+  apiGateway:
+    apiKeys:
+      - name: x-api-key
+        value: ${ssm:/omni/${self:provider.stage}/bio-rad/api-key}
+        description: 'API key for bio rad ${self:custom.stage} apis'
+
+  deploymentBucket:
+    name: ${ssm:/omni-dw/${self:provider.stage}/sls/deployment/bucket}
+    serverSideEncryption: AES256
+
+custom:
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  tags:
+    Application: OmniBioRadApiServices
+    CreateBy: BizCloudExperts
+    Environment: ${self:custom.stage}
+
+package:
+  individually: true
+functions:
+  #  lambda's responsible for inserting values from streams to shipment-header table
+  create-shipment: ${file(config/functions/create-shipment.yml):function}
+  create-shipment-processor: ${file(config/functions/create-shipment-processor.yml):function}
+  update-shipment: ${file(config/functions/update-shipment.yml):function}
+  update-shipment-processor: ${file(config/functions/update-shipment-processor.yml):function}
+  cancel-shipment: ${file(config/functions/cancel-shipment.yml):function}
+  update-source-db: ${file(config/functions/update-source-db.yml):function}
+  add-tracking: ${file(config/functions/add-tracking.yml):function}
+  delete-add-tracking: ${file(config/functions/delete-add-tracking.yml):function}
+  send-order-events: ${file(config/functions/send-order-events.yml):function}
+  send-billing-invoice: ${file(config/functions/send-billing-invoice.yml):function}
+
+layers:
+  NodeModules:
+    path: lambdaLayer/lib
+    name: ${self:service}-layer-${self:provider.stage}
+    description: Omni bio rad api services lambda layer for all node modules - ${self:provider.stage}
+    compatibleRuntimes:
+      - nodejs20.x
+    retain: false
