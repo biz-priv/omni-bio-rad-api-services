@@ -143,6 +143,7 @@ const CONSTANTS = {
     'DOCUM': 'ADD_DOC_CHG',
     'DOC': 'DOC_CHG_DES',
     'DPICKU': 'ADDT_PICKUP_FEE',
+    'SPEC': 'ADDT_PICKUP_FEE',
     'DRU': 'DRIVER_LOAD',
     'FORK': 'OFFLOADING_SITE',
     'LTL': 'BASE_CHARGE',
