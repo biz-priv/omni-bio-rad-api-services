@@ -328,7 +328,7 @@ async function verifyShipment(orderNo, invoiceSeqNo, newImage) {
     );
     if (freightOrderId === '') {
       throw new Error(
-        `Freight Order Id is not found for this orderNo: ${orderNo}`
+        `SKIPPING, Freight Order Id is not found for this orderNo: ${orderNo}`
       );
     }
 
