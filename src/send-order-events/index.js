@@ -36,7 +36,7 @@ module.exports.handler = async (event, context) => {
       const cstDate = moment().tz('America/Chicago');
       dynamoData.CSTDate = cstDate.format('YYYY-MM-DD');
       dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
-      dynamoData.Event = record;
+      dynamoData.Event = JSON.stringify(record);
       dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
       console.info('🚀 -> file: index.js:42 -> get -> Log Id:', get(dynamoData, 'Id', ''));
       dynamoData.Process = get(CONSTANTS, 'shipmentProcess.sendOrderEvents', '');
