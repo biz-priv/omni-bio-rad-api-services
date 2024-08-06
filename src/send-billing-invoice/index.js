@@ -34,7 +34,7 @@ module.exports.handler = async (event, context) => {
       const cstDate = moment().tz('America/Chicago');
       dynamoData.CSTDate = cstDate.format('YYYY-MM-DD');
       dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
-      dynamoData.Event = record;
+      dynamoData.Event = JSON.stringify(record);
       dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
       console.info('🚀 -> file: index.js:38 -> get -> Log Id:', get(dynamoData, 'Id', ''));
       dynamoData.Process = get(CONSTANTS, 'shipmentProcess.sendBillingInvoice', '');
@@ -43,33 +43,21 @@ module.exports.handler = async (event, context) => {
       const message = JSON.parse(get(recordBody, 'Message', ''));
 
       const newImage = AWS.DynamoDB.Converter.unmarshall(get(message, 'NewImage', {}));
-      if (
-        get(newImage, 'PostedDateTime', '').includes('1900') ||
-        get(newImage, 'PostedDateTime', '') === '' ||
-        get(newImage, 'PostedDateTime', '') === null
-      ) {
-        console.info('SKIPPING, This shipment is not yet posted');
-        throw new Error('SKIPPING, This shipment is not yet posted');
-      }
+      
       orderNo = get(newImage, 'FK_OrderNo', '');
       invoiceSeqNo = get(newImage, 'InvoiceSeqNo', '');
       dynamoData.OrderNo = orderNo;
       dynamoData.InvoiceSeqNo = invoiceSeqNo;
-      const verifyShipmentData = await verifyShipment(orderNo, invoiceSeqNo);
+      const verifyShipmentData = await verifyShipment(orderNo, invoiceSeqNo, newImage);
+      if (!get(verifyShipmentData, 'validShipmentFlag', false)) {
+        return false;
+      }
       freightOrderId = get(verifyShipmentData, 'freightOrderId', '');
       headerData = get(verifyShipmentData, 'headerData', []);
       referencesData = get(verifyShipmentData, 'referencesData', []);
 
       dynamoData.FreightOrderId = freightOrderId;
 
-      if (!get(verifyShipmentData, 'validShipmentFlag', false)) {
-        console.info(
-          'SKIPPING, This shipment is not valid to process the shipment(either this is not belong to bio rad or freight order id is missing).'
-        );
-        throw new Error(
-          'SKIPPING, This shipment is not valid to process the shipment(either this is not belong to bio rad or freight order id is missing).'
-        );
-      }
       const payload = await preparePayload(
         newImage,
         headerData,
@@ -294,7 +282,7 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
   }
 }
 
-async function verifyShipment(orderNo, invoiceSeqNo) {
+async function verifyShipment(orderNo, invoiceSeqNo, newImage) {
   try {
     const headerParams = {
       TableName: process.env.SHIPMENT_HEADER_TABLE,
@@ -307,7 +295,18 @@ async function verifyShipment(orderNo, invoiceSeqNo) {
     console.info('header data: ', headerData);
     if (!bioRadCustomerIds.includes(get(headerData, '[0].BillNo'))) {
       console.info('This event is not related to bio rad. So, skipping the process.');
-      return false;
+      return {
+        validShipmentFlag: false
+      };
+    }
+
+    if (
+      get(newImage, 'PostedDateTime', '').includes('1900') ||
+      get(newImage, 'PostedDateTime', '') === '' ||
+      get(newImage, 'PostedDateTime', '') === null
+    ) {
+      console.info('SKIPPING, This shipment is not yet posted');
+      throw new Error('SKIPPING, This shipment is not yet posted');
     }
 
     const referencesParams = {
@@ -328,13 +327,9 @@ async function verifyShipment(orderNo, invoiceSeqNo) {
       ''
     );
     if (freightOrderId === '') {
-      return {
-        validShipmentFlag: false,
-        headerData,
-        referencesData,
-        freightOrderId,
-        shipmentData: {},
-      };
+      throw new Error(
+        `SKIPPING, Freight Order Id is not found for this orderNo: ${orderNo}`
+      );
     }
 
     const Params = {
