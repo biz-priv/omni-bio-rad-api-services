@@ -244,8 +244,8 @@ module.exports.handler = async (event, context) => {
     if (updateShipmentsFlag) {
       dynamoData.Status = 'PENDING';
     } else {
-      initialRecord.LastUpdateEvent = []
-      initialRecord.LastUpdateEvent.push({
+      initialRecord[0].LastUpdateEvent = []
+      initialRecord[0].LastUpdateEvent.push({
         id: get(dynamoData, 'Id', ''),
         time: cstDate.format('YYYY-MM-DD HH:mm:ss SSS'),
       });
