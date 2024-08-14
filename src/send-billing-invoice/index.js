@@ -65,7 +65,6 @@ module.exports.handler = async (event, context) => {
         freightOrderId,
         invoiceSeqNo
       );
-      dynamoData.Payload = JSON.stringify(payload)
       console.info('payload: ', JSON.stringify(payload));
       if (get(payload, 'attachments[0].fileContentBinaryObject', '') === '') {
         throw new Error(
