@@ -20,7 +20,10 @@ const { CONSTANTS } = require('../Shared/constants');
 const dynamoData = {};
 
 module.exports.handler = async (event, context) => {
-  console.info('🚀 -> file: index.js:22 -> module.exports.handler= -> event:', JSON.stringify(event));
+  console.info(
+    '🚀 -> file: index.js:22 -> module.exports.handler= -> event:',
+    JSON.stringify(event)
+  );
   try {
     const eventBody = JSON.parse(get(event, 'body', {}));
 
@@ -244,7 +247,7 @@ module.exports.handler = async (event, context) => {
     if (updateShipmentsFlag) {
       dynamoData.Status = 'PENDING';
     } else {
-      initialRecord[0].LastUpdateEvent = []
+      initialRecord[0].LastUpdateEvent = [];
       initialRecord[0].LastUpdateEvent.push({
         id: get(dynamoData, 'Id', ''),
         time: cstDate.format('YYYY-MM-DD HH:mm:ss SSS'),

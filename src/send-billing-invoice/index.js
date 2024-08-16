@@ -43,7 +43,14 @@ module.exports.handler = async (event, context) => {
       const message = JSON.parse(get(recordBody, 'Message', ''));
 
       const newImage = AWS.DynamoDB.Converter.unmarshall(get(message, 'NewImage', {}));
-      
+
+      if (get(newImage, 'APARCode', '') === 'V') {
+        console.info(
+          'This is a vendor invoice item, skipping the event as this process is to send customer invoice to bio rad.'
+        );
+        return false;
+      }
+
       orderNo = get(newImage, 'FK_OrderNo', '');
       invoiceSeqNo = get(newImage, 'InvoiceSeqNo', '');
       dynamoData.OrderNo = orderNo;
@@ -180,9 +187,10 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
     };
     const aparData = await getData(aparParams);
     console.info('apar data: ', aparData);
-    const grossAmount = (aparData
+    const grossAmount = aparData
       .filter((obj) => obj.InvoiceSeqNo === get(newImage, 'InvoiceSeqNo', ''))
-      .reduce((sum, item) => sum + Number(get(item, 'Total', 0)), 0)).toFixed(3);
+      .reduce((sum, item) => sum + Number(get(item, 'Total', 0)), 0)
+      .toFixed(3);
     dynamoData.GrossAmount = grossAmount;
     if (grossAmount <= 0) {
       throw new Error(
@@ -295,7 +303,7 @@ async function verifyShipment(orderNo, invoiceSeqNo, newImage) {
     if (!bioRadCustomerIds.includes(get(headerData, '[0].BillNo'))) {
       console.info('This event is not related to bio rad. So, skipping the process.');
       return {
-        validShipmentFlag: false
+        validShipmentFlag: false,
       };
     }
 
@@ -326,9 +334,7 @@ async function verifyShipment(orderNo, invoiceSeqNo, newImage) {
       ''
     );
     if (freightOrderId === '') {
-      throw new Error(
-        `SKIPPING, Freight Order Id is not found for this orderNo: ${orderNo}`
-      );
+      throw new Error(`SKIPPING, Freight Order Id is not found for this orderNo: ${orderNo}`);
     }
 
     const Params = {
