@@ -10,7 +10,10 @@ const { CONSTANTS } = require('../Shared/constants');
 const dynamoData = {};
 
 module.exports.handler = async (event, context) => {
-  console.info('🚀 -> file: index.js:12 -> module.exports.handler= -> event:', JSON.stringify(event));
+  console.info(
+    '🚀 -> file: index.js:12 -> module.exports.handler= -> event:',
+    JSON.stringify(event)
+  );
   try {
     const eventBody = JSON.parse(get(event, 'body', {}));
 
@@ -18,7 +21,7 @@ module.exports.handler = async (event, context) => {
     const cstDate = moment().tz('America/Chicago');
     dynamoData.CSTDate = cstDate.format('YYYY-MM-DD');
     dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
-    dynamoData.Event = get(event, 'body', '');
+    dynamoData.Event = JSON.stringify(get(event, 'body', ''));
     dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
     console.info(
       '🚀 -> file: index.js:25 -> module.exports.handler= -> Log Id:',

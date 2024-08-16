@@ -149,7 +149,7 @@ module.exports.handler = async (event, context) => {
         console.info('stopId is doesnt exit');
         throw new Error('SKIPPING, There is no stop Id exist for this shipment.');
       }
-      console.info('payload: ',JSON.stringify(payload));
+      console.info('payload: ', JSON.stringify(payload));
       const token = await getLbnToken();
       dynamoData.Response = await sendOrderEventsLbn(token, payload);
       dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
