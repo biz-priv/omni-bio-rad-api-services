@@ -252,7 +252,7 @@ module.exports.handler = async (event, context) => {
         id: get(dynamoData, 'Id', ''),
         time: cstDate.format('YYYY-MM-DD HH:mm:ss SSS'),
       });
-      await putLogItem(initialRecord);
+      await putLogItem(initialRecord[0]);
       dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
     }
 
