@@ -346,7 +346,7 @@ async function getPayloadData(
         },
       ];
     } else {
-      const docType = get(CONSTANTS, `docType.${orderStatus.toUpperCase()}`);
+      const docType = orderStatus.toUpperCase();
       console.info('document type: ', docType);
       const docData = await getDocsFromWebsli({ housebill, doctype: `doctype=${docType}` });
 
