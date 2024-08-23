@@ -151,7 +151,7 @@ module.exports.handler = async (event, context) => {
       }
       console.info('payload: ', JSON.stringify(payload));
       const token = await getLbnToken();
-      dynamoData.Response = await sendOrderEventsLbn(token, payload);
+      await sendOrderEventsLbn(token, payload);
       dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
       await putLogItem(dynamoData);
     } catch (error) {
