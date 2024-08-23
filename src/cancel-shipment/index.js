@@ -61,6 +61,8 @@ module.exports.handler = async (event, context) => {
         await cancelShipmentApiCall(housebill);
       })
     );
+    await updateFreightOrder(freightOrderId);
+
     dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
     await putLogItem(dynamoData);
     return {
@@ -203,5 +205,37 @@ async function getHousebills(referenceNo) {
   } catch (error) {
     console.error('Error while fetching housebill', error);
     throw error;
+  }
+}
+
+async function updateFreightOrder(freightOrderId) {
+  try {
+    const logDataParams = {
+      TableName: process.env.LOGS_TABLE,
+      IndexName: 'FreightOrderId-Index',
+      KeyConditionExpression: 'FreightOrderId = :FreightOrderId',
+      FilterExpression: '#status = :status AND #process = :process',
+      ExpressionAttributeNames: {
+        '#status': 'Status',
+        '#process': 'Process',
+      },
+      ExpressionAttributeValues: {
+        ':FreightOrderId': freightOrderId,
+        ':status': get(CONSTANTS, 'statusVal.success', ''),
+        ':process': get(CONSTANTS, 'shipmentProcess.create', ''),
+      },
+    };
+
+    const logDataResult = await getData(logDataParams);
+    console.info('🚀 -> file: index.js:230 -> updateFreightOrder -> logDataResult:', logDataResult);
+    logDataResult[0].Status = 'CANCELLED';
+    await putLogItem(logDataResult[0]);
+  } catch (error) {
+    console.error(
+      `Error while updating the previous created shipment record in logs table: ${error}`
+    );
+    throw new Error(
+      `Error while updating the previous created shipment record in logs table: ${error}`
+    );
   }
 }
