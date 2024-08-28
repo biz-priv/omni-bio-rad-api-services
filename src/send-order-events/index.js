@@ -481,7 +481,7 @@ async function convertToPdf(base64) {
       doc.end();
     });
   } catch (error) {
-    console.error('Error while ');
+    console.error('Error while converting jpg to pdf', error);
     throw error;
   }
 }
