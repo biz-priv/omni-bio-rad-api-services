@@ -17,6 +17,8 @@ const {
   sendSESEmail,
 } = require('../Shared/dataHelper');
 const { CONSTANTS } = require('../Shared/constants');
+const PDFKIT = require('pdfkit');
+const sizeOf = require('buffer-image-size');
 
 const bioRadCustomerIds = process.env.BIO_RAD_BILL_TO_NUMBERS.split(',');
 let eventType;
@@ -122,6 +124,7 @@ module.exports.handler = async (event, context) => {
         console.info('There is no frieght order Id for this shipment.');
         throw new Error('SKIPPING, There is no frieght order Id for this shipment.');
       }
+      dynamoData.FreightOrderId = orderId;
 
       if (eventType !== 'geolocation') {
         await verifyIfEventAlreadySent(orderId);
@@ -219,29 +222,8 @@ module.exports.handler = async (event, context) => {
       dynamoData.Status = flag;
       await putLogItem(dynamoData);
     }
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify(
-        {
-          Message: get(CONSTANTS, 'statusVal.success', ''),
-        },
-        null,
-        2
-      ),
-    };
   } catch (error) {
-    console.error('Error in handler: ', error);
-    return {
-      statusCode: 400,
-      body: JSON.stringify(
-        {
-          Message: 'Failed',
-        },
-        null,
-        2
-      ),
-    };
+    console.error('Error in handler catch block: ', error);
   }
 };
 
@@ -376,20 +358,25 @@ async function getPayloadData(
       if (docData.length > 0) {
         const fileName = get(docData, '[0].filename', '');
         let mimeType;
+        let base64Str;
         if (fileName.includes('.pdf')) {
+          base64Str = get(docData, '[0].b64str', '');
           mimeType = 'application/pdf';
         } else if (fileName.includes('.jpg')) {
-          mimeType = 'image/jpg';
+          base64Str = await convertToPdf(Buffer.from(get(docData, '[0].b64str', ''), 'base64'));
+          mimeType = 'application/pdf';
         } else if (fileName.includes('.jpeg')) {
+          base64Str = get(docData, '[0].b64str', '');
           mimeType = 'image/jpeg';
         } else if (fileName.includes('.png')) {
+          base64Str = get(docData, '[0].b64str', '');
           mimeType = 'image/png';
         }
 
         events[0].attachments.push({
           fileName,
           mimeType,
-          fileContentBinaryObject: get(docData, '[0].b64str', ''),
+          fileContentBinaryObject: base64Str,
         });
       }
     }
@@ -471,6 +458,30 @@ async function verifyIfEventAlreadySent(orderId) {
     }
   } catch (error) {
     console.error(error);
+    throw error;
+  }
+}
+
+async function convertToPdf(base64) {
+  try {
+    return new Promise((resolve) => {
+      const pdfBuffer = [];
+      const dimensions = sizeOf(base64);
+      const doc = new PDFKIT({
+        size: [get(dimensions, 'width'), get(dimensions, 'height')],
+      });
+      doc.on('data', (chunk) => pdfBuffer.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(pdfBuffer).toString('base64')));
+
+      doc.image(base64, 0, 0, {
+        width: get(dimensions, 'width'),
+        height: get(dimensions, 'height'),
+      });
+
+      doc.end();
+    });
+  } catch (error) {
+    console.error('Error while converting jpg to pdf', error);
     throw error;
   }
 }
