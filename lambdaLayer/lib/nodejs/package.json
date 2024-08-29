@@ -11,9 +11,11 @@
   "dependencies": {
     "aws-sdk": "^2.1163.0",
     "axios": "^1.6.7",
+    "buffer-image-size": "^0.6.4",
     "lodash": "^4.17.21",
     "moment-timezone": "^0.5.45",
     "mssql": "^10.0.2",
+    "pdfkit": "^0.15.0",
     "uuid": "^9.0.1",
     "xml-js": "^1.6.11",
     "xml2js": "^0.6.2"
