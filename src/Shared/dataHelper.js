@@ -1,6 +1,7 @@
 'use strict';
 
 const AWS = require('aws-sdk');
+
 const ses = new AWS.SES();
 const xml2js = require('xml2js');
 const { get } = require('lodash');

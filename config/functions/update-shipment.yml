@@ -16,3 +16,5 @@ function:
         path: /LbnFreightOrderForSubcontracting/{orderingPartyLbnId}/{originatorId}/{freightOrderId}
         method: PUT
         private: true
+  environment:
+    SHIPMENT_HEADER_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/shipment-header/ddb.tableName}
