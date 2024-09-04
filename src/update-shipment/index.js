@@ -245,6 +245,7 @@ module.exports.handler = async (event, context) => {
     console.info(updateResponses);
     dynamoData.ShipmentUpdates = updateResponses;
     if (updateShipmentsFlag) {
+      await verifyIfWeCanCancelShipment(get(dynamoData, 'HousebillsToDelete', []), get(dynamoData, 'FreightOrderId', ''))
       dynamoData.Status = 'PENDING';
     } else {
       initialRecord[0].LastUpdateEvent = [];
@@ -348,4 +349,33 @@ module.exports.handler = async (event, context) => {
 
 function compareJson(initialPayload, newPayload) {
   return !isEqual(initialPayload, newPayload);
+}
+
+
+async function verifyIfWeCanCancelShipment(housebills, FreightOrderId) {
+  try{
+    await Promise.all(
+      housebills.map(async (housebill) => {
+        const headerParams = {
+          TableName: process.env.SHIPMENT_HEADER_TABLE,
+          IndexName: 'Housebill-index',
+          KeyConditionExpression: 'Housebill = :Housebill',
+          ExpressionAttributeValues: {
+            ':Housebill': housebill,
+          },
+        };
+        const headerResult = await getData(headerParams);
+        console.info('🚀 -> file: index.js:371 -> housebills.map -> headerResult:', headerResult);
+
+        /* If any shipment status is other than WEB or CAN, 
+           then it considers as shipment is already in process and cannot cancel the shipment. */
+        if (get(headerResult, '[0].FK_OrderStatusId', '') !== 'WEB') {
+          throw new Error(`Error, Provided freightOrderId cannot be updated as shipment already started. ${FreightOrderId}.`);
+        }
+      })
+    );
+  }catch(error){
+    console.error('Error while verifying if we can cancel a shipment', error);
+    throw error;
+  }
 }
