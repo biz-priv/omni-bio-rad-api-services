@@ -137,6 +137,16 @@ async function prepareReferenceList(loadingStage, unloadingStage, dynamoData) {
     ReferenceList: {
       NewShipmentRefsV3: [
         {
+          ReferenceNo: get(dynamoData, 'FreightOrderId', ''),
+          CustomerTypeV3: 'Shipper',
+          RefTypeId: 'SID',
+        },
+        {
+          ReferenceNo: get(dynamoData, 'FreightOrderId', ''),
+          CustomerTypeV3: 'Consignee',
+          RefTypeId: 'SID',
+        },
+        {
           ReferenceNo: get(loadingStage, 'senderSystemStageID', ''),
           CustomerTypeV3: 'Shipper',
           RefTypeId: 'DL#',
