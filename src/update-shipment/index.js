@@ -292,9 +292,9 @@ module.exports.handler = async (event, context) => {
       };
       console.info('🚀 -> file: index.js:295 -> payload:', JSON.stringify(payload));
 
-      // const token = await getLbnToken();
-      // await sendToLbn(token, payload, dynamoData);
-      // await putLogItem(initialRecord[0]);
+      const token = await getLbnToken();
+      await sendToLbn(token, payload, dynamoData);
+      await putLogItem(initialRecord[0]);
       dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
     }
 
