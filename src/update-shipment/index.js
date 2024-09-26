@@ -14,6 +14,9 @@ const {
   groupItems,
   getServiceLevel,
   sendSESEmail,
+  getDocsFromWebsli,
+  getLbnToken,
+  sendToLbn,
 } = require('../Shared/dataHelper');
 const { CONSTANTS } = require('../Shared/constants');
 
@@ -253,7 +256,45 @@ module.exports.handler = async (event, context) => {
         id: get(dynamoData, 'Id', ''),
         time: cstDate.format('YYYY-MM-DD HH:mm:ss SSS'),
       });
-      await putLogItem(initialRecord[0]);
+
+      const documentPromises = get(dynamoData, 'Housebill', []).map(async (housebill) => {
+        const data = await getDocsFromWebsli({
+          housebill,
+          doctype: 'doctype=HOUSEBILL|doctype=LABEL',
+        });
+        return { data, housebill };
+      });
+
+      const documentResults = await Promise.all(documentPromises);
+
+      const businessDocumentReferences = [];
+      const responsePayloadAttachments = [];
+
+      documentResults.map(async (data) => {
+        businessDocumentReferences.push({
+          documentId: get(data, 'housebill', ''),
+          documentTypeCode: 'T51',
+        });
+        get(data, 'data', []).map(async (doc) => {
+          responsePayloadAttachments.push({
+            name: doc.filename,
+            mimeCode: 'application/pdf',
+            fileContentBinaryObject: doc.b64str,
+          });
+        });
+      });
+
+      const payload = {
+        carrierPartyLbnId: get(dynamoData, 'CarrierPartyLbnId', ''),
+        confirmationStatus: 'CN',
+        businessDocumentReferences,
+        responsePayloadAttachments,
+      };
+      console.info('🚀 -> file: index.js:295 -> payload:', JSON.stringify(payload));
+
+      // const token = await getLbnToken();
+      // await sendToLbn(token, payload, dynamoData);
+      // await putLogItem(initialRecord[0]);
       dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
     }
 
