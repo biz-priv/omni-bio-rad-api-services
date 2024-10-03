@@ -20,7 +20,7 @@ const {
 } = require('../Shared/dataHelper');
 const { CONSTANTS } = require('../Shared/constants');
 
-const dynamoData = {};
+let dynamoData = {};
 
 module.exports.handler = async (event, context) => {
   console.info(
@@ -28,6 +28,7 @@ module.exports.handler = async (event, context) => {
     JSON.stringify(event)
   );
   try {
+    dynamoData = {};
     const eventBody = JSON.parse(get(event, 'body', {}));
 
     const attachments = JSON.parse(JSON.stringify(get(eventBody, 'attachments', [])));
@@ -248,7 +249,10 @@ module.exports.handler = async (event, context) => {
     console.info(updateResponses);
     dynamoData.ShipmentUpdates = updateResponses;
     if (updateShipmentsFlag) {
-      await verifyIfWeCanCancelShipment(get(dynamoData, 'HousebillsToDelete', []), get(dynamoData, 'FreightOrderId', ''))
+      await verifyIfWeCanCancelShipment(
+        get(dynamoData, 'HousebillsToDelete', []),
+        get(dynamoData, 'FreightOrderId', '')
+      );
       dynamoData.Status = 'PENDING';
     } else {
       initialRecord[0].LastUpdateEvent = [];
@@ -392,9 +396,8 @@ function compareJson(initialPayload, newPayload) {
   return !isEqual(initialPayload, newPayload);
 }
 
-
 async function verifyIfWeCanCancelShipment(housebills, FreightOrderId) {
-  try{
+  try {
     await Promise.all(
       housebills.map(async (housebill) => {
         const headerParams = {
@@ -411,11 +414,13 @@ async function verifyIfWeCanCancelShipment(housebills, FreightOrderId) {
         /* If any shipment status is other than WEB or CAN, 
            then it considers as shipment is already in process and cannot cancel the shipment. */
         if (get(headerResult, '[0].FK_OrderStatusId', '') !== 'WEB') {
-          throw new Error(`Error, Provided freightOrderId cannot be updated as shipment already started. ${FreightOrderId}.`);
+          throw new Error(
+            `Error, Provided freightOrderId cannot be updated as shipment already started. ${FreightOrderId}.`
+          );
         }
       })
     );
-  }catch(error){
+  } catch (error) {
     console.error('Error while verifying if we can cancel a shipment', error);
     throw error;
   }
