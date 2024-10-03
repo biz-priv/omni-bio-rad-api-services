@@ -85,12 +85,15 @@ async function prepareHeaderData(eventBody) {
     IncoTermsCode: get(eventBody, 'incoterm', ''),
   };
   let specialInstructions = '';
-  await Promise.all(
-    get(eventBody, 'notes', []).map(async (note) => {
-      specialInstructions += get(note, 'text', '')
-        .replace(/\n/g, '&#10;')
-        .replace(/<br>/g, '&#10;');
-    })
+  specialInstructions += get(
+    get(eventBody, 'notes', []).find((obj) => get(obj, 'type') === 'E0104'),
+    'text',
+    ''
+  );
+  specialInstructions += get(
+    get(eventBody, 'notes', []).find((obj) => get(obj, 'type') === 'RMARK'),
+    'text',
+    ''
   );
   headerData.SpecialInstructions = specialInstructions;
   if (get(CONSTANTS, `mode.${get(eventBody, 'shippingTypeCode', '')}`, '') !== '') {
@@ -136,6 +139,11 @@ async function prepareReferenceList(loadingStage, unloadingStage, dynamoData) {
   const referenceList = {
     ReferenceList: {
       NewShipmentRefsV3: [
+        {
+          ReferenceNo: get(dynamoData, 'FreightOrderId', ''),
+          CustomerTypeV3: 'Shipper',
+          RefTypeId: 'SID',
+        },
         {
           ReferenceNo: get(loadingStage, 'senderSystemStageID', ''),
           CustomerTypeV3: 'Shipper',

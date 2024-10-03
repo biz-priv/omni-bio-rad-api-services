@@ -14,10 +14,13 @@ const {
   groupItems,
   getServiceLevel,
   sendSESEmail,
+  getDocsFromWebsli,
+  getLbnToken,
+  sendToLbn,
 } = require('../Shared/dataHelper');
 const { CONSTANTS } = require('../Shared/constants');
 
-const dynamoData = {};
+let dynamoData = {};
 
 module.exports.handler = async (event, context) => {
   console.info(
@@ -25,6 +28,7 @@ module.exports.handler = async (event, context) => {
     JSON.stringify(event)
   );
   try {
+    dynamoData = {};
     const eventBody = JSON.parse(get(event, 'body', {}));
 
     const attachments = JSON.parse(JSON.stringify(get(eventBody, 'attachments', [])));
@@ -245,7 +249,10 @@ module.exports.handler = async (event, context) => {
     console.info(updateResponses);
     dynamoData.ShipmentUpdates = updateResponses;
     if (updateShipmentsFlag) {
-      await verifyIfWeCanCancelShipment(get(dynamoData, 'HousebillsToDelete', []), get(dynamoData, 'FreightOrderId', ''))
+      await verifyIfWeCanCancelShipment(
+        get(dynamoData, 'HousebillsToDelete', []),
+        get(dynamoData, 'FreightOrderId', '')
+      );
       dynamoData.Status = 'PENDING';
     } else {
       initialRecord[0].LastUpdateEvent = [];
@@ -253,6 +260,44 @@ module.exports.handler = async (event, context) => {
         id: get(dynamoData, 'Id', ''),
         time: cstDate.format('YYYY-MM-DD HH:mm:ss SSS'),
       });
+
+      const documentPromises = get(dynamoData, 'Housebill', []).map(async (housebill) => {
+        const data = await getDocsFromWebsli({
+          housebill,
+          doctype: 'doctype=HOUSEBILL|doctype=LABEL',
+        });
+        return { data, housebill };
+      });
+
+      const documentResults = await Promise.all(documentPromises);
+
+      const businessDocumentReferences = [];
+      const responsePayloadAttachments = [];
+
+      documentResults.map(async (data) => {
+        businessDocumentReferences.push({
+          documentId: get(data, 'housebill', ''),
+          documentTypeCode: 'T51',
+        });
+        get(data, 'data', []).map(async (doc) => {
+          responsePayloadAttachments.push({
+            name: doc.filename,
+            mimeCode: 'application/pdf',
+            fileContentBinaryObject: doc.b64str,
+          });
+        });
+      });
+
+      const payload = {
+        carrierPartyLbnId: get(dynamoData, 'CarrierPartyLbnId', ''),
+        confirmationStatus: 'CN',
+        businessDocumentReferences,
+        responsePayloadAttachments,
+      };
+      console.info('🚀 -> file: index.js:295 -> payload:', JSON.stringify(payload));
+
+      const token = await getLbnToken();
+      await sendToLbn(token, payload, dynamoData);
       await putLogItem(initialRecord[0]);
       dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
     }
@@ -351,9 +396,8 @@ function compareJson(initialPayload, newPayload) {
   return !isEqual(initialPayload, newPayload);
 }
 
-
 async function verifyIfWeCanCancelShipment(housebills, FreightOrderId) {
-  try{
+  try {
     await Promise.all(
       housebills.map(async (housebill) => {
         const headerParams = {
@@ -370,11 +414,13 @@ async function verifyIfWeCanCancelShipment(housebills, FreightOrderId) {
         /* If any shipment status is other than WEB or CAN, 
            then it considers as shipment is already in process and cannot cancel the shipment. */
         if (get(headerResult, '[0].FK_OrderStatusId', '') !== 'WEB') {
-          throw new Error(`Error, Provided freightOrderId cannot be updated as shipment already started. ${FreightOrderId}.`);
+          throw new Error(
+            `Error, Provided freightOrderId cannot be updated as shipment already started. ${FreightOrderId}.`
+          );
         }
       })
     );
-  }catch(error){
+  } catch (error) {
     console.error('Error while verifying if we can cancel a shipment', error);
     throw error;
   }

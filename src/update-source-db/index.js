@@ -53,11 +53,11 @@ async function connectToSQLServer(query) {
     pool = new sql.ConnectionPool(config);
 
     await pool.connect();
-    console.log('Connected to the database successfully');
+    console.info('Connected to the database successfully');
 
     const result = await pool.request().query(query);
 
-    console.log('Query result:', result.recordset);
+    console.info('Query result:', result.recordset);
   } catch (err) {
     console.error('Error: ', err);
     throw err;

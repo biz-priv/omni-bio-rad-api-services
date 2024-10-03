@@ -7,7 +7,7 @@ const { putLogItem, getData } = require('../Shared/dynamo');
 const { cancelShipmentApiCall, sendSESEmail } = require('../Shared/dataHelper');
 const { CONSTANTS } = require('../Shared/constants');
 
-const dynamoData = {};
+let dynamoData = {};
 
 module.exports.handler = async (event, context) => {
   console.info(
@@ -15,6 +15,7 @@ module.exports.handler = async (event, context) => {
     JSON.stringify(event)
   );
   try {
+    dynamoData = {};
     const eventBody = JSON.parse(get(event, 'body', {}));
 
     // Set the time zone to CST
