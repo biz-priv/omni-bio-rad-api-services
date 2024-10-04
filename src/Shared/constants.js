@@ -130,7 +130,7 @@ const CONSTANTS = {
     '6M': 'OTHC-Heavy-Lift',
     'AM': 'ADDT_FEE',
     'APPT': 'ARVL_NOTIF_APNT',
-    'APPTD': 'ARVL_NOTIF_APNT',
+    'APPTD': 'COLLECT_ON_DEL',
     'ASSIS': 'ADDTN_DRIVER',
     'ATTDL': 'MULT_ATTEM_DEL',
     'ATTPU': 'MULT_ATTEM_DEL',
