@@ -16,11 +16,12 @@ const {
 const { CONSTANTS } = require('../Shared/constants');
 
 const bioRadCustomerIds = process.env.BIO_RAD_BILL_TO_NUMBERS.split(',');
-const dynamoData = {};
+let dynamoData = {};
 
 module.exports.handler = async (event, context) => {
   try {
     console.info('Event: ', JSON.stringify(event));
+    dynamoData = {};
 
     const record = get(event, 'Records[0]', []);
     let headerData;

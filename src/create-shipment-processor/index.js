@@ -73,7 +73,7 @@ module.exports.handler = async (event, context) => {
           businessDocumentReferences,
           attachments,
         };
-        console.info('🚀 -> file: index.js:73 -> records.map -> payload:', payload);
+        console.info('🚀 -> file: index.js:73 -> records.map -> payload:', JSON.stringify(payload));
 
         const token = await getLbnToken();
         await sendToLbn(token, payload, dynamoData);
