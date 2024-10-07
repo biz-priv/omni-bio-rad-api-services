@@ -179,11 +179,12 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
     const aparParams = {
       TableName: process.env.SHIPMENT_APAR_TABLE,
       KeyConditionExpression: 'FK_OrderNo = :PK_OrderNo',
-      FilterExpression: 'APARCode = :APARCode AND InvoiceSeqNo = :InvoiceSeqNo',
+      FilterExpression: 'APARCode = :APARCode AND InvoiceSeqNo = :InvoiceSeqNo AND Finalize = :Finalize',
       ExpressionAttributeValues: {
         ':PK_OrderNo': get(newImage, 'FK_OrderNo', ''),
         ':APARCode': 'C',
         ':InvoiceSeqNo': invoiceSeqNo,
+        ':Finalize': 'Y',
       },
     };
     const aparData = await getData(aparParams);
