@@ -135,6 +135,7 @@ const CONSTANTS = {
     'ATTDL': 'MULT_ATTEM_DEL',
     'ATTPU': 'MULT_ATTEM_DEL',
     'BOB': 'BOBTAIL_CHG',
+    'BDDL': 'BEY_FRT_CHG',
     'BYDL': 'BEY_FRT_CHG',
     'BYPU': 'BEY_FRT_CHG',
     'CONDL': 'APPL',
