@@ -292,7 +292,7 @@ module.exports.handler = async (event, context) => {
         carrierPartyLbnId: get(dynamoData, 'CarrierPartyLbnId', ''),
         confirmationStatus: 'CN',
         businessDocumentReferences,
-        responsePayloadAttachments,
+        attachments: responsePayloadAttachments,
       };
       console.info('🚀 -> file: index.js:295 -> payload:', JSON.stringify(payload));
 
