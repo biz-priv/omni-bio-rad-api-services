@@ -91,23 +91,29 @@ module.exports.handler = async (event, context) => {
         eventType = 'geolocation';
 
         data = AWS.DynamoDB.Converter.unmarshall(get(message, 'dynamodb.NewImage', {}), eventType);
-        housebill = get(data, 'HouseBillNo');
-        console.info(data);
-        const headerParams = {
-          TableName: process.env.SHIPMENT_HEADER_TABLE,
-          IndexName: 'Housebill-index',
-          KeyConditionExpression: 'Housebill = :Housebill',
-          ExpressionAttributeValues: {
-            ':Housebill': get(data, 'HouseBillNo'),
-          },
-        };
-        const headerData = await getData(headerParams);
-        console.info(headerData);
-        fileNumber = get(headerData, '[0].PK_OrderNo');
-        location = {
-          latitude: get(data, 'latitude'),
-          longitude: get(data, 'longitude'),
-        };
+        housebill = get(data, 'HouseBillNo', get(message, 'housebill'));
+        if(housebill){
+          const headerParams = {
+            TableName: process.env.SHIPMENT_HEADER_TABLE,
+            IndexName: 'Housebill-index',
+            KeyConditionExpression: 'Housebill = :Housebill',
+            ExpressionAttributeValues: {
+              ':Housebill': housebill,
+            },
+          };
+          const headerData = await getData(headerParams);
+          console.info(headerData);
+          fileNumber = get(headerData, '[0].PK_OrderNo');
+          location = {
+            latitude: get(data, 'latitude'),
+            longitude: get(data, 'longitude'),
+          };
+        } else{
+          console.info(`No housebill found for geo location event: ${record}`)
+          throw new Error(
+            `SKIPPING, No housebill found for geo location event: ${record}`
+          );
+        }
       }
 
       dynamoData.OrderStatus = orderStatus;
