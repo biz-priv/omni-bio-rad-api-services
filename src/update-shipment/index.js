@@ -1,22 +1,11 @@
 'use strict';
 
-const { get, isEqual } = require('lodash');
+const { get } = require('lodash');
 const uuid = require('uuid');
 const moment = require('moment-timezone');
-const { putLogItem, getData } = require('../Shared/dynamo');
+const { putLogItem } = require('../Shared/dynamo');
 const {
-  prepareHeaderData,
-  prepareShipperAndConsigneeData,
-  prepareReferenceList,
-  prepareShipmentLineListDate,
-  prepareDateValues,
-  prepareWTPayload,
-  groupItems,
-  getServiceLevel,
-  sendSESEmail,
-  getDocsFromWebsli,
-  getLbnToken,
-  sendToLbn,
+  sendSESEmail
 } = require('../Shared/dataHelper');
 const { CONSTANTS } = require('../Shared/constants');
 
@@ -44,32 +33,6 @@ module.exports.handler = async (event, context) => {
       );
     }
 
-    let initialRecord;
-    if (get(event, 'pathParameters.freightOrderId', '') !== '') {
-      const Params = {
-        TableName: process.env.LOGS_TABLE,
-        IndexName: 'FreightOrderId-Index',
-        KeyConditionExpression: 'FreightOrderId = :FreightOrderId',
-        ExpressionAttributeValues: {
-          ':FreightOrderId': get(event, 'pathParameters.freightOrderId', ''),
-        },
-      };
-
-      const Result = await getData(Params);
-      initialRecord = Result.filter(
-        (obj) =>
-          obj.Process === get(CONSTANTS, 'shipmentProcess.create', '') &&
-          obj.Status === get(CONSTANTS, 'statusVal.success', '')
-      );
-      console.info(
-        '🚀 -> file: index.js:52 -> module.exports.handler= -> initialRecord:',
-        initialRecord
-      );
-    } else {
-      throw new Error(
-        'Error, FreightOrderId is missing in the request, please add the details in the request.'
-      );
-    }
     const cstDate = moment().tz('America/Chicago');
     dynamoData.CSTDate = cstDate.format('YYYY-MM-DD');
     dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
@@ -97,211 +60,8 @@ module.exports.handler = async (event, context) => {
       'orderingParty.sourceSystemBusinessPartnerID',
       ''
     );
-    dynamoData.Housebill = [];
-    dynamoData.FileNumber = [];
-    if (initialRecord.length < 1) {
-      throw new Error(
-        `Error, There are no shipments for the given freight order Id: ${get(dynamoData, 'FreightOrderId')}, please create a shipment before updating.`
-      );
-    }
 
-    if (
-      get(dynamoData, 'FreightOrderId', '') === '' ||
-      get(dynamoData, 'OrderingPartyLbnId', '') === '' ||
-      get(dynamoData, 'CarrierPartyLbnId', '') === ''
-    ) {
-      throw new Error(
-        'Error, FreightOrderId or OrderingPartyLbnId or CarrierPartyLbnId is missing in the request, please add the details in the request.'
-      );
-    }
-    console.info(dynamoData.CSTDateTime);
-
-    const headerData = await prepareHeaderData(eventBody);
-    console.info(headerData);
-
-    const transportationStages = get(eventBody, 'transportationStages', []);
-    const items = get(eventBody, 'items', []);
-
-    // group the items to understand how many shipments were exist in the request.
-    const groupedItems = await groupItems(items);
-    console.info(groupedItems);
-    const groupedItemKeys = Object.keys(groupedItems);
-    console.info(groupedItemKeys);
-
-    // Prepare all the payloads at once(which helps in multi shipment scenario)
-    const wtPayloadsData = await Promise.all(
-      groupedItemKeys.map(async (key) => {
-        const loadingStage = transportationStages.find(
-          (obj) => get(obj, 'loadingLocation.id', '') === key.split('-')[0]
-        );
-        const unloadingStage = transportationStages.find(
-          (obj) => get(obj, 'unloadingLocation.id', '') === key.split('-')[1]
-        );
-        const stage = transportationStages.find(
-          (obj) =>
-            get(obj, 'loadingLocation.id', '') === key.split('-')[0] &&
-            get(obj, 'unloadingLocation.id', '') === key.split('-')[1]
-        );
-        console.info(loadingStage.loadingLocation.id);
-        console.info(unloadingStage.unloadingLocation.id);
-        console.info(stage);
-        let serviceLevel = '';
-        if (Number(get(eventBody, 'shippingTypeCode', 0)) === 18) {
-          serviceLevel = 'HS';
-        } else if (!stage) {
-          serviceLevel = await getServiceLevel(
-            transportationStages,
-            get(loadingStage, 'loadingLocation.id', ''),
-            get(unloadingStage, 'unloadingLocation.id', ''),
-            'multiple'
-          );
-        } else if (get(stage, 'totalDuration.value', '') !== '') {
-          const totalDuration = moment.duration(get(stage, 'totalDuration.value', '')).asHours();
-          if (totalDuration === 0) {
-            serviceLevel = 'ND';
-          } else if (totalDuration > 120) {
-            serviceLevel = 'E7';
-          } else {
-            const serviceLevelValue = get(CONSTANTS, 'serviceLevel', []).find(
-              (obj) => totalDuration > obj.min && totalDuration <= obj.max
-            );
-            serviceLevel = get(serviceLevelValue, 'value', '');
-          }
-        } else {
-          throw new Error(
-            `Error, Cannot get the total duration from the connecting stages, please provide the total duration for this shipment from ${get(loadingStage, 'loadingLocation.id', '')} to ${get(unloadingStage, 'unloadingLocation.id', '')}`
-          );
-        }
-        const shipperAndConsignee = await prepareShipperAndConsigneeData(
-          loadingStage,
-          unloadingStage
-        );
-        console.info(shipperAndConsignee);
-
-        const referenceList = await prepareReferenceList(loadingStage, unloadingStage, dynamoData);
-        console.info(JSON.stringify(referenceList));
-
-        const shipmentLineList = await prepareShipmentLineListDate(get(groupedItems, key, []));
-        console.info(JSON.stringify(shipmentLineList));
-
-        const dateValues = await prepareDateValues(
-          loadingStage,
-          unloadingStage,
-          transportationStages
-        );
-        console.info(dateValues);
-
-        const payloads = await prepareWTPayload(
-          headerData,
-          shipperAndConsignee,
-          referenceList,
-          shipmentLineList,
-          dateValues,
-          serviceLevel
-        );
-        console.info(payloads);
-        return { ...payloads, stopId: key };
-      })
-    );
-    console.info('wtPayloadsData: ', wtPayloadsData);
-    console.info('results: ', get(initialRecord, '[0].ShipmentDetails', ''));
-    const updateResponses = [];
-    let updateShipmentsFlag = false;
-    dynamoData.HousebillsToDelete = [];
-    await Promise.all(
-      wtPayloadsData.map(async (data) => {
-        console.info(get(data, 'stopId', ''));
-        const initialPayload = get(
-          initialRecord,
-          `[0].ShipmentDetails[${get(data, 'stopId', '')}]`,
-          ''
-        );
-
-        const updateFlag = compareJson(
-          get(initialPayload, 'jsonPayload', ''),
-          get(data, 'jsonPayload', '')
-        );
-
-        console.info(updateFlag);
-        if (!updateFlag) {
-          dynamoData.Housebill.push(get(initialPayload, 'housebill', ''));
-          dynamoData.FileNumber.push(get(initialPayload, 'fileNumber', ''));
-          updateResponses.push({
-            ...initialPayload,
-            updateFlag,
-          });
-        } else {
-          dynamoData.HousebillsToDelete.push(get(initialPayload, 'housebill', ''));
-          updateShipmentsFlag = true;
-          updateResponses.push({
-            initialXmlPayload: get(initialPayload, 'xmlPayload', ''),
-            intialFileNumber: get(initialPayload, 'fileNumber', ''),
-            intialHousebill: get(initialPayload, 'housebill', ''),
-            jsonPayload: JSON.stringify(get(data, 'jsonPayload', '')),
-            xmlPayload: get(data, 'xmlPayload', ''),
-            stopId: get(data, 'stopId', ''),
-            updateFlag,
-          });
-        }
-        console.info(dynamoData.Housebill);
-      })
-    );
-    console.info(updateResponses);
-    dynamoData.ShipmentUpdates = updateResponses;
-    if (updateShipmentsFlag) {
-      await verifyIfWeCanCancelShipment(
-        get(dynamoData, 'HousebillsToDelete', []),
-        get(dynamoData, 'FreightOrderId', '')
-      );
-      dynamoData.Status = 'PENDING';
-    } else {
-      initialRecord[0].LastUpdateEvent = [];
-      initialRecord[0].LastUpdateEvent.push({
-        id: get(dynamoData, 'Id', ''),
-        time: cstDate.format('YYYY-MM-DD HH:mm:ss SSS'),
-      });
-
-      const documentPromises = get(dynamoData, 'Housebill', []).map(async (housebill) => {
-        const data = await getDocsFromWebsli({
-          housebill,
-          doctype: 'doctype=HOUSEBILL|doctype=LABEL',
-        });
-        return { data, housebill };
-      });
-
-      const documentResults = await Promise.all(documentPromises);
-
-      const businessDocumentReferences = [];
-      const responsePayloadAttachments = [];
-
-      documentResults.map(async (data) => {
-        businessDocumentReferences.push({
-          documentId: get(data, 'housebill', ''),
-          documentTypeCode: 'T51',
-        });
-        get(data, 'data', []).map(async (doc) => {
-          responsePayloadAttachments.push({
-            name: doc.filename,
-            mimeCode: 'application/pdf',
-            fileContentBinaryObject: doc.b64str,
-          });
-        });
-      });
-
-      const payload = {
-        carrierPartyLbnId: get(dynamoData, 'CarrierPartyLbnId', ''),
-        confirmationStatus: 'CN',
-        businessDocumentReferences,
-        attachments: responsePayloadAttachments,
-      };
-      console.info('🚀 -> file: index.js:295 -> payload:', JSON.stringify(payload));
-
-      const token = await getLbnToken();
-      await sendToLbn(token, payload, dynamoData);
-      await putLogItem(initialRecord[0]);
-      dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
-    }
-
+    dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
     console.info(dynamoData);
     await putLogItem(dynamoData);
     return {
@@ -391,37 +151,3 @@ module.exports.handler = async (event, context) => {
     };
   }
 };
-
-function compareJson(initialPayload, newPayload) {
-  return !isEqual(initialPayload, newPayload);
-}
-
-async function verifyIfWeCanCancelShipment(housebills, FreightOrderId) {
-  try {
-    await Promise.all(
-      housebills.map(async (housebill) => {
-        const headerParams = {
-          TableName: process.env.SHIPMENT_HEADER_TABLE,
-          IndexName: 'Housebill-index',
-          KeyConditionExpression: 'Housebill = :Housebill',
-          ExpressionAttributeValues: {
-            ':Housebill': housebill,
-          },
-        };
-        const headerResult = await getData(headerParams);
-        console.info('🚀 -> file: index.js:371 -> housebills.map -> headerResult:', headerResult);
-
-        /* If any shipment status is other than WEB or CAN, 
-           then it considers as shipment is already in process and cannot cancel the shipment. */
-        if (get(headerResult, '[0].FK_OrderStatusId', '') !== 'WEB') {
-          throw new Error(
-            `Error, Provided freightOrderId cannot be updated as shipment already started. ${FreightOrderId}.`
-          );
-        }
-      })
-    );
-  } catch (error) {
-    console.error('Error while verifying if we can cancel a shipment', error);
-    throw error;
-  }
-}

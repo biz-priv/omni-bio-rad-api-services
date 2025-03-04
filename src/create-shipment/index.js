@@ -2,22 +2,9 @@
 
 const { get } = require('lodash');
 const uuid = require('uuid');
-const axios = require('axios');
 const moment = require('moment-timezone');
 const { putLogItem, getData } = require('../Shared/dynamo');
-const {
-  xmlJsonConverter,
-  sendToWT,
-  prepareHeaderData,
-  prepareShipperAndConsigneeData,
-  prepareReferenceList,
-  prepareShipmentLineListDate,
-  prepareDateValues,
-  prepareWTPayload,
-  groupItems,
-  getServiceLevel,
-  sendSESEmail,
-} = require('../Shared/dataHelper');
+const { sendSESEmail } = require('../Shared/dataHelper');
 const { CONSTANTS } = require('../Shared/constants');
 
 let dynamoData = {};
@@ -70,10 +57,6 @@ module.exports.handler = async (event, context) => {
       'orderingParty.sourceSystemBusinessPartnerID',
       ''
     );
-    dynamoData.ShipmentDetails = {};
-    dynamoData.FileNumber = [];
-    dynamoData.Housebill = [];
-    dynamoData.LastUpdateEvent = [];
 
     if (
       get(dynamoData, 'FreightOrderId', '') === '' ||
@@ -112,184 +95,19 @@ module.exports.handler = async (event, context) => {
       }
     }
 
-    const headerData = await prepareHeaderData(eventBody);
-    console.info('🚀 -> file: index.js:108 -> module.exports.handler= -> headerData:', headerData);
-    if (get(headerData, 'Mode', '') === 'Domestic') {
+    let mode;
+    if (get(CONSTANTS, `mode.${get(eventBody, 'shippingTypeCode', '')}`, '') !== '') {
+      mode = get(CONSTANTS, `mode.${get(eventBody, 'shippingTypeCode', '')}`, '');
+    }
+
+    if (mode === 'Domestic') {
       dynamoData.ShipmentType = 'LTL';
     } else {
       dynamoData.ShipmentType = 'FTL';
     }
 
-    const transportationStages = get(eventBody, 'transportationStages', []);
-    const items = get(eventBody, 'items', []);
-
-    // group the items to understand how many shipments were exist in the request.
-    const groupedItems = await groupItems(items);
-    console.info(
-      '🚀 -> file: index.js:120 -> module.exports.handler= -> groupedItems:',
-      groupedItems
-    );
-    const groupedItemKeys = Object.keys(groupedItems);
-
-    // Prepare all the payloads at once(which helps in multi shipment scenario)
-    const wtPayloadsData = await Promise.all(
-      groupedItemKeys.map(async (key) => {
-        const loadingStage = transportationStages.find(
-          (obj) => get(obj, 'loadingLocation.id', '') === key.split('-')[0]
-        );
-        const unloadingStage = transportationStages.find(
-          (obj) => get(obj, 'unloadingLocation.id', '') === key.split('-')[1]
-        );
-        const stage = transportationStages.find(
-          (obj) =>
-            get(obj, 'loadingLocation.id', '') === key.split('-')[0] &&
-            get(obj, 'unloadingLocation.id', '') === key.split('-')[1]
-        );
-        console.info(loadingStage.loadingLocation.id);
-        console.info(unloadingStage.unloadingLocation.id);
-        console.info(stage);
-        let serviceLevel = '';
-        if (Number(get(eventBody, 'shippingTypeCode', 0)) === 18) {
-          serviceLevel = 'HS';
-        } else if (!stage) {
-          serviceLevel = await getServiceLevel(
-            transportationStages,
-            get(loadingStage, 'loadingLocation.id', ''),
-            get(unloadingStage, 'unloadingLocation.id', ''),
-            'multiple'
-          );
-        } else if (get(stage, 'totalDuration.value', '') !== '') {
-          const totalDuration = moment.duration(get(stage, 'totalDuration.value', '')).asHours();
-          if (totalDuration === 0) {
-            serviceLevel = 'ND';
-          } else if (totalDuration > 120) {
-            serviceLevel = 'E7';
-          } else {
-            const serviceLevelValue = get(CONSTANTS, 'serviceLevel', []).find(
-              (obj) => totalDuration > obj.min && totalDuration <= obj.max
-            );
-            serviceLevel = get(serviceLevelValue, 'value', '');
-          }
-        } else {
-          throw new Error(
-            `Error, Cannot get the total duration from the connecting stages, please provide the total duration for this shipment from ${get(loadingStage, 'loadingLocation.id', '')} to ${get(unloadingStage, 'unloadingLocation.id', '')}`
-          );
-        }
-        const shipperAndConsignee = await prepareShipperAndConsigneeData(
-          loadingStage,
-          unloadingStage
-        );
-        console.info(
-          '🚀 -> file: index.js:208 -> groupedItemKeys.map -> shipperAndConsignee:',
-          shipperAndConsignee
-        );
-
-        const referenceList = await prepareReferenceList(loadingStage, unloadingStage, dynamoData);
-        console.info(
-          '🚀 -> file: index.js:176 -> groupedItemKeys.map -> referenceList:',
-          JSON.stringify(referenceList)
-        );
-
-        const shipmentLineList = await prepareShipmentLineListDate(get(groupedItems, key, []));
-        console.info(
-          '🚀 -> file: index.js:179 -> groupedItemKeys.map -> shipmentLineList:',
-          JSON.stringify(shipmentLineList)
-        );
-
-        const dateValues = await prepareDateValues(
-          loadingStage,
-          unloadingStage,
-          transportationStages
-        );
-        console.info('🚀 -> file: index.js:209 -> groupedItemKeys.map -> dateValues:', dateValues);
-
-        const payloads = await prepareWTPayload(
-          headerData,
-          shipperAndConsignee,
-          referenceList,
-          shipmentLineList,
-          dateValues,
-          serviceLevel
-        );
-        return { ...payloads, stopId: key };
-      })
-    );
-    console.info(
-      '🚀 -> file: index.js:199 -> module.exports.handler= -> wtPayloadsData:',
-      wtPayloadsData
-    );
-
-    // Send the payloads to world trak for shipment creation one by one as it doesn't allow conurrent executions.
-    for (const data of wtPayloadsData) {
-      const xmlResponse = await sendToWT(get(data, 'xmlPayload', ''));
-
-      const xmlObjResponse = await xmlJsonConverter(xmlResponse);
-
-      if (
-        get(
-          xmlObjResponse,
-          'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.ErrorMessage',
-          ''
-        ) !== '' ||
-        get(
-          xmlObjResponse,
-          'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.Housebill',
-          ''
-        ) === ''
-      ) {
-        throw new Error(
-          `WORLD TRAK API call failed: ${get(
-            xmlObjResponse,
-            'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.ErrorMessage',
-            ''
-          )}`
-        );
-      }
-
-      const housebill = get(
-        xmlObjResponse,
-        'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.Housebill',
-        ''
-      );
-      const fileNumber = get(
-        xmlObjResponse,
-        'soap:Envelope.soap:Body.AddNewShipmentV3Response.AddNewShipmentV3Result.ShipQuoteNo',
-        ''
-      );
-
-      dynamoData.ShipmentDetails[get(data, 'stopId')] = data;
-      dynamoData.ShipmentDetails[get(data, 'stopId')].housebill = housebill;
-      dynamoData.ShipmentDetails[get(data, 'stopId')].fileNumber = fileNumber;
-      dynamoData.ShipmentDetails[get(data, 'stopId')].XmlResponse = xmlResponse;
-      dynamoData.FileNumber.push(fileNumber);
-      dynamoData.Housebill.push(housebill);
-    }
-
-    const filteredAttachments = await attachments.filter((obj) => obj.typeCode === 'ATCMT');
-    await Promise.all(
-      filteredAttachments.map(async (attachment) => {
-        await Promise.all(
-          get(dynamoData, 'Housebill', []).map(async (housebill) => {
-            const xmlPayload = `<?xml version="1.0" encoding="utf-8"?>
-        <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-          <soap:Body>
-            <AttachFileToShipment xmlns="http://tempuri.org/">
-              <Filename>${get(attachment, 'description', '')}</Filename>
-              <FileDataBase64>${get(attachment, 'fileContentBinaryObject', '')}</FileDataBase64>
-              <Housebill>${housebill}</Housebill>
-              <CustomerAccess>Yes</CustomerAccess>
-              <DocType>WORK INS</DocType>
-              <PrintWithInvoice>No</PrintWithInvoice>
-            </AttachFileToShipment>
-          </soap:Body>
-        </soap:Envelope>`;
-            await sendAddDocument(xmlPayload);
-          })
-        );
-      })
-    );
-
-    dynamoData.Status = 'PENDING';
+    dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
+    console.info('🚀 -> module.exports.handler= -> dynamoData:', dynamoData);
     await putLogItem(dynamoData);
     return {
       statusCode: 200,
@@ -381,29 +199,3 @@ module.exports.handler = async (event, context) => {
     };
   }
 };
-
-async function sendAddDocument(xmlString) {
-  try {
-    console.info(xmlString);
-    const config = {
-      url: process.env.UPLOAD_DOCUMENT_API,
-      method: 'post',
-      headers: {
-        'Accept': 'text/xml',
-        'Content-Type': 'text/xml; charset=utf-8',
-        'soapAction': 'http://tempuri.org/AttachFileToShipment',
-      },
-      data: xmlString,
-    };
-    console.info('🚀 -> file: index.js:370 -> sendAddDocument -> config:', config);
-    const res = await axios.request(config);
-    console.info('🚀 -> file: index.js:372 -> sendAddDocument -> res:', res);
-    if (get(res, 'status', '') !== 200) {
-      console.info(get(res, 'data', ''));
-      throw new Error(`ADD DOCUMENT API Request Failed: ${res}`);
-    }
-  } catch (error) {
-    console.info(error);
-    throw error;
-  }
-}

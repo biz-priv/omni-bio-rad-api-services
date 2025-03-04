@@ -92,7 +92,7 @@ module.exports.handler = async (event, context) => {
 
         data = AWS.DynamoDB.Converter.unmarshall(get(message, 'dynamodb.NewImage', {}), eventType);
         housebill = get(data, 'HouseBillNo', get(message, 'housebill'));
-        if(housebill){
+        if (housebill) {
           const headerParams = {
             TableName: process.env.SHIPMENT_HEADER_TABLE,
             IndexName: 'Housebill-index',
@@ -105,14 +105,12 @@ module.exports.handler = async (event, context) => {
           console.info(headerData);
           fileNumber = get(headerData, '[0].PK_OrderNo');
           location = {
-            latitude: get(data, 'latitude'),
-            longitude: get(data, 'longitude'),
+            latitude: get(data, 'latitude', get(message, 'latitude')),
+            longitude: get(data, 'longitude', get(message, 'longitude')),
           };
-        } else{
-          console.info(`No housebill found for geo location event: ${record}`)
-          throw new Error(
-            `SKIPPING, No housebill found for geo location event: ${record}`
-          );
+        } else {
+          console.info(`No housebill found for geo location event: ${record}`);
+          throw new Error(`SKIPPING, No housebill found for geo location event: ${record}`);
         }
       }
 
