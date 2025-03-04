@@ -4,9 +4,7 @@ const { get } = require('lodash');
 const uuid = require('uuid');
 const moment = require('moment-timezone');
 const { putLogItem } = require('../Shared/dynamo');
-const {
-  sendSESEmail
-} = require('../Shared/dataHelper');
+const { sendSESEmail } = require('../Shared/dataHelper');
 const { CONSTANTS } = require('../Shared/constants');
 
 let dynamoData = {};

@@ -4,7 +4,7 @@ const { get } = require('lodash');
 const uuid = require('uuid');
 const moment = require('moment-timezone');
 const { putLogItem, getData } = require('../Shared/dynamo');
-const { sendSESEmail } = require('../Shared/dataHelper');
+const { sendSESEmail, getLbnToken, sendToLbn } = require('../Shared/dataHelper');
 const { CONSTANTS } = require('../Shared/constants');
 
 let dynamoData = {};
@@ -106,7 +106,16 @@ module.exports.handler = async (event, context) => {
       dynamoData.ShipmentType = 'FTL';
     }
 
-    dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
+    const payload = {
+      carrierPartyLbnId: get(dynamoData, 'CarrierPartyLbnId', ''),
+      confirmationStatus: 'CN',
+    };
+    console.info('🚀 -> file: index.js:113 -> records.map -> payload:', JSON.stringify(payload));
+
+    const token = await getLbnToken();
+    await sendToLbn(token, payload, dynamoData);
+
+    dynamoData.Status = 'SUCCESS';
     console.info('🚀 -> module.exports.handler= -> dynamoData:', dynamoData);
     await putLogItem(dynamoData);
     return {
