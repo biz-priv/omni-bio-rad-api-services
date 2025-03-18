@@ -59,7 +59,16 @@ module.exports.handler = async (event, context) => {
       ''
     );
 
-    dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
+    const payload = {
+      carrierPartyLbnId: get(dynamoData, 'CarrierPartyLbnId', ''),
+      confirmationStatus: 'CN',
+    };
+    console.info('🚀 -> file: index.js:66 -> records.map -> payload:', JSON.stringify(payload));
+
+    const token = await getLbnToken();
+    await sendToLbn(token, payload, dynamoData);
+
+    dynamoData.Status = 'SUCCESS';
     console.info(dynamoData);
     await putLogItem(dynamoData);
     return {

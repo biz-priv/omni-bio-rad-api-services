@@ -74,7 +74,6 @@ custom:
 package:
   individually: true
 functions:
-  #  lambda's responsible for inserting values from streams to shipment-header table
   create-shipment: ${file(config/functions/create-shipment.yml):function}
   # create-shipment-processor: ${file(config/functions/create-shipment-processor.yml):function}
   update-shipment: ${file(config/functions/update-shipment.yml):function}

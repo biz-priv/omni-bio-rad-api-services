@@ -4,7 +4,7 @@ const { get } = require('lodash');
 const uuid = require('uuid');
 const moment = require('moment-timezone');
 const { putLogItem, getData } = require('../Shared/dynamo');
-const { cancelShipmentApiCall, sendSESEmail } = require('../Shared/dataHelper');
+const { sendSESEmail } = require('../Shared/dataHelper');
 const { CONSTANTS } = require('../Shared/constants');
 
 let dynamoData = {};
@@ -29,8 +29,6 @@ module.exports.handler = async (event, context) => {
       get(dynamoData, 'Id', '')
     );
     dynamoData.Process = get(CONSTANTS, 'shipmentProcess.cancel', '');
-    dynamoData.XmlPayload = {};
-    dynamoData.XmlResponse = {};
 
     let freightOrderId = '';
     if (get(eventBody, 'freightOrderId', '') === '') {
@@ -43,25 +41,7 @@ module.exports.handler = async (event, context) => {
       freightOrderId = get(eventBody, 'freightOrderId', '');
     }
     dynamoData.FreightOrderId = freightOrderId;
-    const housebillArray = await getHousebills(freightOrderId);
-    console.info(housebillArray);
-    if (housebillArray.length === 0) {
-      throw new Error(
-        `Error, No housebills were found for the given freightOrderId: ${freightOrderId}`
-      );
-    }
-    dynamoData.HousebillArray = housebillArray;
 
-    const cancelledHousebills = [];
-    await Promise.all(
-      housebillArray.map(async (housebill) => {
-        if (cancelledHousebills.includes(housebill)) {
-          return;
-        }
-        cancelledHousebills.push(housebill);
-        await cancelShipmentApiCall(housebill);
-      })
-    );
     await updateFreightOrder(freightOrderId);
 
     dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
