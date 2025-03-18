@@ -84,7 +84,7 @@ functions:
   delete-add-tracking: ${file(config/functions/delete-add-tracking.yml):function}
   send-order-events: ${file(config/functions/send-order-events.yml):function}
   send-billing-invoice: ${file(config/functions/send-billing-invoice.yml):function}
-  send-aws-confirmation: ${file(config/functions/send-aws-confirmation.yml):function}
+  send-aws-confirmation: ${file(config/functions/send-awb-confirmation.yml):function}
 
 layers:
   NodeModules:
