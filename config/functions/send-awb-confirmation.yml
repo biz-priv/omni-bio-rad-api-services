@@ -12,11 +12,11 @@ function:
       - src/send-awb-confirmation/**
       - src/Shared/**
   events:
-      - stream:
-          arn: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/references/ddb.streamArn}
-          batchSize: 1
-          maximumRetryAttempts: 2
-          bisectBatchOnFunctionError: true
+    - stream:
+        arn: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/references/ddb.streamArn}
+        batchSize: 1
+        maximumRetryAttempts: 2
+        bisectBatchOnFunctionError: true
   environment:
     SHIPMENT_HEADER_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/shipment-header/ddb.tableName}
     BIO_RAD_BILL_TO_NUMBERS: ${ssm:/omni/${self:provider.stage}/bio-rad/bill-to/numbers}

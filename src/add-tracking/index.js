@@ -1,7 +1,7 @@
 'use strict';
 
 const { get } = require('lodash');
-const { putLogItem } = require('../Shared/dynamo');
+const { putLogItem, getData } = require('../Shared/dynamo');
 const uuid = require('uuid');
 const moment = require('moment-timezone');
 const { querySourceDb, sendSESEmail } = require('../Shared/dataHelper');
@@ -35,6 +35,32 @@ module.exports.handler = async (event, context) => {
     dynamoData.TechnicalId = get(eventBody, 'technicalId', '');
     dynamoData.Housebill = [];
 
+    const logDataParams = {
+      TableName: process.env.LOGS_TABLE,
+      IndexName: 'FreightOrderId-Index',
+      KeyConditionExpression: 'FreightOrderId = :FreightOrderId',
+      FilterExpression: '#status = :status AND #process = :process',
+      ExpressionAttributeNames: {
+        '#status': 'Status',
+        '#process': 'Process',
+      },
+      ExpressionAttributeValues: {
+        ':FreightOrderId': get(eventBody, 'shipment.orderId', ''),
+        ':status': get(CONSTANTS, 'statusVal.success', ''),
+        ':process': get(CONSTANTS, 'shipmentProcess.create', ''),
+      },
+    };
+
+    const logDataResult = await getData(logDataParams);
+    console.info('🚀 -> file: index.js:230 -> updateFreightOrder -> logDataResult:', logDataResult);
+    if (logDataResult.length === 0) {
+      console.info(
+        `SKIPPING, There is no shipment creation request for this FO: ${get(eventBody, 'shipment.orderId', '')}`
+      );
+      return;
+    }
+    const createShipmentData = logDataResult[0];
+
     const stops = get(eventBody, 'shipment.stops', '');
 
     const stopsUpdateResults = await Promise.all(
@@ -42,9 +68,15 @@ module.exports.handler = async (event, context) => {
         let locId;
         try {
           locId = get(get(stop, 'location.Id', '').split(':'), '[6]', '');
-          const query = `insert into tbl_references (FK_OrderNo,CustomerType,ReferenceNo,FK_RefTypeId) (select fk_orderno,customertype,'${get(stop, 'stopId', '')}','STO' from tbl_references where referenceno='${locId}' and customertype in ('S','C') and fk_reftypeid='STP' and fk_orderno in (select fk_orderno from tbl_references where customertype='B' and fk_reftypeid='SID' and referenceno='${get(dynamoData, 'FreightOrderId', '')}') and fk_orderno not in (select fk_orderno from tbl_references where referenceno='${get(stop, 'stopId', '')}' and customertype in ('S','C') and fk_reftypeid='STO'))`;
-          await querySourceDb(query);
-          console.info('🚀 -> file: index.js:78 -> stops.map -> query:', query);
+          if (get(createShipmentData, 'LoadingLocationIds', []).includes(locId)) {
+            createShipmentData.Slocid = get(stop, 'stopId', '');
+          } else {
+            createShipmentData.Clocid = get(stop, 'stopId', '');
+          }
+
+          // const query = `insert into tbl_references (FK_OrderNo,CustomerType,ReferenceNo,FK_RefTypeId) (select fk_orderno,customertype,'${get(stop, 'stopId', '')}','STO' from tbl_references where referenceno='${locId}' and customertype in ('S','C') and fk_reftypeid='STP' and fk_orderno in (select fk_orderno from tbl_references where customertype='B' and fk_reftypeid='SID' and referenceno='${get(dynamoData, 'FreightOrderId', '')}') and fk_orderno not in (select fk_orderno from tbl_references where referenceno='${get(stop, 'stopId', '')}' and customertype in ('S','C') and fk_reftypeid='STO'))`;
+          // await querySourceDb(query);
+          // console.info('🚀 -> file: index.js:78 -> stops.map -> query:', query);
           return true;
         } catch (error) {
           console.error(`Error for ${locId}`);
@@ -67,7 +99,9 @@ module.exports.handler = async (event, context) => {
     }
 
     dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
+    await putLogItem(createShipmentData);
     await putLogItem(dynamoData);
+    // eslint-disable-next-line consistent-return
     return {
       statusCode: 200,
       body: JSON.stringify(
@@ -145,6 +179,7 @@ module.exports.handler = async (event, context) => {
     dynamoData.ErrorMsg = errorMsgVal;
     dynamoData.Status = get(CONSTANTS, 'statusVal.failed', '');
     await putLogItem(dynamoData);
+    // eslint-disable-next-line consistent-return
     return {
       statusCode: 400,
       body: JSON.stringify(

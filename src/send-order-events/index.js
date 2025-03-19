@@ -130,6 +130,33 @@ module.exports.handler = async (event, context) => {
       }
       dynamoData.FreightOrderId = orderId;
 
+      const logDataParams = {
+        TableName: process.env.LOGS_TABLE,
+        IndexName: 'FreightOrderId-Index',
+        KeyConditionExpression: 'FreightOrderId = :FreightOrderId',
+        FilterExpression: '#status = :status AND #process = :process',
+        ExpressionAttributeNames: {
+          '#status': 'Status',
+          '#process': 'Process',
+        },
+        ExpressionAttributeValues: {
+          ':FreightOrderId': get(dynamoData, 'FreightOrderId', ''),
+          ':status': get(CONSTANTS, 'statusVal.success', ''),
+          ':process': get(CONSTANTS, 'shipmentProcess.create', ''),
+        },
+      };
+  
+      const logDataResult = await getData(logDataParams);
+      console.info('🚀 -> file: index.js:230 -> updateFreightOrder -> logDataResult:', logDataResult);
+      if (logDataResult.length === 0) {
+        console.info(
+          `SKIPPING, There is no shipment creation request for this FO: ${get(dynamoData, 'FreightOrderId', '')}`
+        );
+        throw new Error(`SKIPPING, There is no shipment creation request for this FO: ${get(dynamoData, 'FreightOrderId', '')}`);
+      }
+      const createShipmentData = logDataResult[0];
+      console.info('🚀 -> module.exports.handler= -> createShipmentData:', createShipmentData);
+
       if (eventType !== 'geolocation') {
         await verifyIfEventAlreadySent(orderId);
       }
@@ -148,7 +175,8 @@ module.exports.handler = async (event, context) => {
         data,
         dynamoData,
         referenceData,
-        orderId
+        orderId,
+        createShipmentData
       );
       console.info(JSON.stringify(payload));
 
@@ -238,25 +266,14 @@ async function getPayloadData(
   data,
   dynamoData,
   referenceData,
-  orderId
+  orderId,
+  createShipmentData
 ) {
   try {
     const trackingData = await fetchTackingData(fileNumber);
 
-    const slocid = get(
-      referenceData.find(
-        (obj) => get(obj, 'CustomerType') === 'S' && get(obj, 'FK_RefTypeId') === 'STO'
-      ),
-      'ReferenceNo',
-      ''
-    );
-    const clocid = get(
-      referenceData.find(
-        (obj) => get(obj, 'CustomerType') === 'C' && get(obj, 'FK_RefTypeId') === 'STO'
-      ),
-      'ReferenceNo',
-      ''
-    );
+    const slocid = get(createShipmentData,'Slocid','');
+    const clocid = get(createShipmentData,'Clocid','');
 
     console.info('orderId, slocid, clocid', orderId, slocid, clocid);
 

@@ -185,7 +185,7 @@ const CONSTANTS = {
     deleteAddTracking: 'DELETE_ADD_TRACKING',
     sendOrderEvents: 'SEND_ORDER_EVENTS',
     sendBillingInvoice: 'SEND_BILLING_INVOICE',
-    sendAWBConfirmation: 'SEND_AWB_CONFIRMATION'
+    sendAWBConfirmation: 'SEND_AWB_CONFIRMATION',
   },
   statusVal: {
     success: 'SUCCESS',

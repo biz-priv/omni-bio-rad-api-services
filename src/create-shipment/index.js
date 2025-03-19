@@ -4,7 +4,7 @@ const { get } = require('lodash');
 const uuid = require('uuid');
 const moment = require('moment-timezone');
 const { putLogItem, getData } = require('../Shared/dynamo');
-const { sendSESEmail, getLbnToken, sendToLbn } = require('../Shared/dataHelper');
+const { sendSESEmail, getLbnToken, sendToLbn, groupItems } = require('../Shared/dataHelper');
 const { CONSTANTS } = require('../Shared/constants');
 
 let dynamoData = {};
@@ -57,6 +57,8 @@ module.exports.handler = async (event, context) => {
       'orderingParty.sourceSystemBusinessPartnerID',
       ''
     );
+    dynamoData.UnloadingLocationIds = [];
+    dynamoData.LoadingLocationIds = [];
 
     if (
       get(dynamoData, 'FreightOrderId', '') === '' ||
@@ -105,6 +107,34 @@ module.exports.handler = async (event, context) => {
     } else {
       dynamoData.ShipmentType = 'FTL';
     }
+
+    const transportationStages = get(eventBody, 'transportationStages', []);
+    const items = get(eventBody, 'items', []);
+
+    // group the items to understand how many shipments were exist in the request.
+    const groupedItems = await groupItems(items);
+    console.info(
+      '🚀 -> file: index.js:120 -> module.exports.handler= -> groupedItems:',
+      groupedItems
+    );
+    const groupedItemKeys = Object.keys(groupedItems);
+
+    // Prepare all the payloads at once(which helps in multi shipment scenario)
+    await Promise.all(
+      groupedItemKeys.map(async (key) => {
+        const loadingStage = transportationStages.find(
+          (obj) => get(obj, 'loadingLocation.id', '') === key.split('-')[0]
+        );
+        const unloadingStage = transportationStages.find(
+          (obj) => get(obj, 'unloadingLocation.id', '') === key.split('-')[1]
+        );
+        console.info('loading id', loadingStage.loadingLocation.id);
+        console.info('unloading id', unloadingStage.unloadingLocation.id);
+        dynamoData.LoadingLocationIds.push(get(loadingStage, 'loadingLocation.id'));
+        dynamoData.UnloadingLocationIds.push(get(unloadingStage, 'unloadingLocation.id'));
+      })
+    );
+    console.info('🚀 -> groupedItemKeys.map -> dynamoData:', dynamoData);
 
     const payload = {
       carrierPartyLbnId: get(dynamoData, 'CarrierPartyLbnId', ''),
