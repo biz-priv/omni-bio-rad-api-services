@@ -33,7 +33,7 @@ module.exports.handler = async (event, context) => {
       },
     };
     const headerResult = await getData(headerParams);
-    // console.info('🚀 -> module.exports.handler= -> headerResult:', headerResult);
+    console.info('🚀 -> module.exports.handler= -> headerResult:', headerResult);
     if (!bioRadCustomerIds.includes(get(headerResult, '[0].BillNo'))) {
       console.info('SKIPPING, This event is not related to bio rad.');
       return;
@@ -75,7 +75,10 @@ module.exports.handler = async (event, context) => {
       dynamoData.Id = uuid.v4().replace(/[^a-zA-Z0-9]/g, '');
       dynamoData.Process = get(CONSTANTS, 'shipmentProcess.sendAWBConfirmation', '');
       dynamoData.OrderNo = get(data, 'FK_OrderNo');
-      if (get(createShipmentData, 'FileNumber', '').length > 0) {
+      if (get(createShipmentData, 'FileNumber', '').length > 0 && get(createShipmentData, 'FileNumber', '').includes(get(data, 'FK_OrderNo'))) {
+        console.info('Filenumber already added and also sent the confirmation to bio rad')
+        return
+      }else if (get(createShipmentData, 'FileNumber', '').length > 0 && !get(createShipmentData, 'FileNumber', '').includes(get(data, 'FK_OrderNo'))) {
         createShipmentData.FileNumber = `${get(createShipmentData, 'FileNumber')},${get(data, 'FK_OrderNo')}`;
         createShipmentData.Housebill = `${get(createShipmentData, 'Housebill')},${get(headerResult, '[0].Housebill')}`;
       } else {
