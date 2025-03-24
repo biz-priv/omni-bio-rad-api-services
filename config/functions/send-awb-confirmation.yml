@@ -1,0 +1,28 @@
+---
+function:
+  name: omni-bio-rad-send-awb-events-${self:provider.stage}
+  handler: src/send-awb-confirmation/index.handler
+  runtime: nodejs20.x
+  timeout: 900
+  layers:
+    - { Ref: NodeModulesLambdaLayer }
+  package:
+    patterns:
+      - '!**/*'
+      - src/send-awb-confirmation/**
+      - src/Shared/**
+  events:
+    - stream:
+        arn: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/references/ddb.streamArn}
+        batchSize: 1
+        maximumRetryAttempts: 2
+        bisectBatchOnFunctionError: true
+  environment:
+    SHIPMENT_HEADER_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/shipment-header/ddb.tableName}
+    BIO_RAD_BILL_TO_NUMBERS: ${ssm:/omni/${self:provider.stage}/bio-rad/bill-to/numbers}
+    GET_DOCUMENT_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/wt/get-document/api.url}
+    LBN_TOKEN_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint}
+    LBN_TOKEN_USERNAME: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/username}
+    LBN_TOKEN_PASSWORD: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/password}
+    LBN_TOKEN_AUTHORIZATION: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/authorization}
+    LBN_SEND_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-send-endpoint}

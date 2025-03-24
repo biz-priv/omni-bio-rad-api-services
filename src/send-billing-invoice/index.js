@@ -179,7 +179,8 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
     const aparParams = {
       TableName: process.env.SHIPMENT_APAR_TABLE,
       KeyConditionExpression: 'FK_OrderNo = :PK_OrderNo',
-      FilterExpression: 'APARCode = :APARCode AND InvoiceSeqNo = :InvoiceSeqNo AND Finalize = :Finalize',
+      FilterExpression:
+        'APARCode = :APARCode AND InvoiceSeqNo = :InvoiceSeqNo AND Finalize = :Finalize',
       ExpressionAttributeValues: {
         ':PK_OrderNo': get(newImage, 'FK_OrderNo', ''),
         ':APARCode': 'C',
@@ -201,13 +202,6 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
     }
 
     console.info('reference data: ', referencesData);
-    const purchasingParty = get(
-      referencesData.find(
-        (obj) => get(obj, 'CustomerType') === 'B' && get(obj, 'FK_RefTypeId') === 'STP'
-      ),
-      'ReferenceNo',
-      ''
-    );
 
     const shipmentData = await getShipmentData(freightOrderId);
     console.info('orderingPartyLbnId: ', get(shipmentData, '[0].OrderingPartyLbnId', ''));
@@ -215,6 +209,10 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
     console.info(
       'billFromParty: ',
       get(shipmentData, '[0].CarrierSourceSystemBusinessPartnerID', '')
+    );
+    console.info(
+      'purchasingParty: ',
+      get(shipmentData, '[0].OrderingPartySourceSystemBusinessPartnerID', '')
     );
     console.info('senderSystemId: ', get(shipmentData, '[0].OriginatorId', ''));
 
@@ -270,7 +268,7 @@ async function preparePayload(newImage, headerData, referencesData, freightOrder
       orderingPartyLbnId: get(shipmentData, '[0].OrderingPartyLbnId', ''),
       carrierLbnId: get(shipmentData, '[0].CarrierPartyLbnId', ''),
       baseDocumentType: '1122',
-      purchasingParty,
+      purchasingParty: get(shipmentData, '[0].OrderingPartySourceSystemBusinessPartnerID', ''),
       billFromParty: get(shipmentData, '[0].CarrierSourceSystemBusinessPartnerID', ''),
       senderSystemId: get(shipmentData, '[0].OriginatorId', ''),
       items: [
