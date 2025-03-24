@@ -17,6 +17,10 @@ module.exports.handler = async (event, context) => {
     '🚀 -> file: index.js:13 -> module.exports.handler= -> event:',
     JSON.stringify(event)
   );
+  if(get(event, 'Records.[0].eventName', '') === 'REMOVE'){
+    console.info('SKIPPING, This is a remove event.');
+    return;
+  }
   try {
     dynamoData = {};
     const NewImage = get(event, 'Records.[0].dynamodb.NewImage', {});
