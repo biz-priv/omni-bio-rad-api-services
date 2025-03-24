@@ -19,3 +19,8 @@ function:
   environment:
     WT_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/wt/create-shipment/api.url}
     UPLOAD_DOCUMENT_API: ${ssm:/omni/${self:provider.stage}/bio-rad/wt/add-document/api.url}
+    LBN_TOKEN_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint}
+    LBN_TOKEN_USERNAME: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/username}
+    LBN_TOKEN_PASSWORD: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/password}
+    LBN_TOKEN_AUTHORIZATION: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/authorization}
+    LBN_SEND_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-send-endpoint}

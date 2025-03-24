@@ -4,7 +4,7 @@ const { get } = require('lodash');
 const uuid = require('uuid');
 const moment = require('moment-timezone');
 const { putLogItem, getData } = require('../Shared/dynamo');
-const { cancelShipmentApiCall, sendSESEmail } = require('../Shared/dataHelper');
+const { sendSESEmail } = require('../Shared/dataHelper');
 const { CONSTANTS } = require('../Shared/constants');
 
 let dynamoData = {};
@@ -29,8 +29,6 @@ module.exports.handler = async (event, context) => {
       get(dynamoData, 'Id', '')
     );
     dynamoData.Process = get(CONSTANTS, 'shipmentProcess.cancel', '');
-    dynamoData.XmlPayload = {};
-    dynamoData.XmlResponse = {};
 
     let freightOrderId = '';
     if (get(eventBody, 'freightOrderId', '') === '') {
@@ -43,25 +41,7 @@ module.exports.handler = async (event, context) => {
       freightOrderId = get(eventBody, 'freightOrderId', '');
     }
     dynamoData.FreightOrderId = freightOrderId;
-    const housebillArray = await getHousebills(freightOrderId);
-    console.info(housebillArray);
-    if (housebillArray.length === 0) {
-      throw new Error(
-        `Error, No housebills were found for the given freightOrderId: ${freightOrderId}`
-      );
-    }
-    dynamoData.HousebillArray = housebillArray;
 
-    const cancelledHousebills = [];
-    await Promise.all(
-      housebillArray.map(async (housebill) => {
-        if (cancelledHousebills.includes(housebill)) {
-          return;
-        }
-        cancelledHousebills.push(housebill);
-        await cancelShipmentApiCall(housebill);
-      })
-    );
     await updateFreightOrder(freightOrderId);
 
     dynamoData.Status = get(CONSTANTS, 'statusVal.success', '');
@@ -153,61 +133,6 @@ module.exports.handler = async (event, context) => {
     };
   }
 };
-
-async function getHousebills(referenceNo) {
-  try {
-    // get all the order no for provided reference no
-    const referenceParams = {
-      TableName: process.env.REFERENCE_TABLE,
-      IndexName: 'ReferenceNo-FK_RefTypeId-index',
-      KeyConditionExpression: 'ReferenceNo = :ReferenceNo and FK_RefTypeId = :FK_RefTypeId',
-      ExpressionAttributeValues: {
-        ':ReferenceNo': referenceNo,
-        ':FK_RefTypeId': 'SID',
-      },
-    };
-
-    const referenceResult = await getData(referenceParams);
-    if (referenceResult.length === 0) {
-      throw new Error(`Error, FreightOrderId is not valid, freightOrderId: ${referenceNo}`);
-    }
-
-    // get all the housebill from the above order nos
-    let housebillArray = [];
-    await Promise.all(
-      referenceResult.map(async (orderData) => {
-        const headerParams = {
-          TableName: process.env.SHIPMENT_HEADER_TABLE,
-          KeyConditionExpression: 'PK_OrderNo = :PK_OrderNo',
-          ExpressionAttributeValues: {
-            ':PK_OrderNo': get(orderData, 'FK_OrderNo', ''),
-          },
-        };
-        const headerResult = await getData(headerParams);
-
-        // If any shipment status is other than WEB or CAN, then it considers as shipment is already in process
-        const unwantedArray = headerResult.filter(
-          (obj) => !['WEB', 'CAN'].includes(obj.FK_OrderStatusId)
-        );
-        if (unwantedArray > 0) {
-          throw new Error(`Error, Provided freightOrderId cannot be cancelled ${referenceNo}.`);
-        }
-
-        // Considering only WEB because CAN means already the shipment is cancelled.
-        const filteredArray = headerResult
-          .filter((obj) => ['WEB'].includes(obj.FK_OrderStatusId) && obj.Housebill)
-          .map((obj) => obj.Housebill);
-
-        housebillArray = [...housebillArray, ...filteredArray];
-      })
-    );
-
-    return housebillArray;
-  } catch (error) {
-    console.error('Error while fetching housebill', error);
-    throw error;
-  }
-}
 
 async function updateFreightOrder(freightOrderId) {
   try {
