@@ -73,10 +73,6 @@ module.exports.handler = async (event, context) => {
           } else {
             createShipmentData.Clocid = get(stop, 'stopId', '');
           }
-
-          // const query = `insert into tbl_references (FK_OrderNo,CustomerType,ReferenceNo,FK_RefTypeId) (select fk_orderno,customertype,'${get(stop, 'stopId', '')}','STO' from tbl_references where referenceno='${locId}' and customertype in ('S','C') and fk_reftypeid='STP' and fk_orderno in (select fk_orderno from tbl_references where customertype='B' and fk_reftypeid='SID' and referenceno='${get(dynamoData, 'FreightOrderId', '')}') and fk_orderno not in (select fk_orderno from tbl_references where referenceno='${get(stop, 'stopId', '')}' and customertype in ('S','C') and fk_reftypeid='STO'))`;
-          // await querySourceDb(query);
-          // console.info('🚀 -> file: index.js:78 -> stops.map -> query:', query);
           return true;
         } catch (error) {
           console.error(`Error for ${locId}`);

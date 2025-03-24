@@ -134,61 +134,6 @@ module.exports.handler = async (event, context) => {
   }
 };
 
-// async function getHousebills(referenceNo) {
-//   try {
-//     // get all the order no for provided reference no
-//     const referenceParams = {
-//       TableName: process.env.REFERENCE_TABLE,
-//       IndexName: 'ReferenceNo-FK_RefTypeId-index',
-//       KeyConditionExpression: 'ReferenceNo = :ReferenceNo and FK_RefTypeId = :FK_RefTypeId',
-//       ExpressionAttributeValues: {
-//         ':ReferenceNo': referenceNo,
-//         ':FK_RefTypeId': 'SID',
-//       },
-//     };
-
-//     const referenceResult = await getData(referenceParams);
-//     if (referenceResult.length === 0) {
-//       throw new Error(`Error, FreightOrderId is not valid, freightOrderId: ${referenceNo}`);
-//     }
-
-//     // get all the housebill from the above order nos
-//     let housebillArray = [];
-//     await Promise.all(
-//       referenceResult.map(async (orderData) => {
-//         const headerParams = {
-//           TableName: process.env.SHIPMENT_HEADER_TABLE,
-//           KeyConditionExpression: 'PK_OrderNo = :PK_OrderNo',
-//           ExpressionAttributeValues: {
-//             ':PK_OrderNo': get(orderData, 'FK_OrderNo', ''),
-//           },
-//         };
-//         const headerResult = await getData(headerParams);
-
-//         // If any shipment status is other than WEB or CAN, then it considers as shipment is already in process
-//         const unwantedArray = headerResult.filter(
-//           (obj) => !['WEB', 'CAN'].includes(obj.FK_OrderStatusId)
-//         );
-//         if (unwantedArray > 0) {
-//           throw new Error(`Error, Provided freightOrderId cannot be cancelled ${referenceNo}.`);
-//         }
-
-//         // Considering only WEB because CAN means already the shipment is cancelled.
-//         const filteredArray = headerResult
-//           .filter((obj) => ['WEB'].includes(obj.FK_OrderStatusId) && obj.Housebill)
-//           .map((obj) => obj.Housebill);
-
-//         housebillArray = [...housebillArray, ...filteredArray];
-//       })
-//     );
-
-//     return housebillArray;
-//   } catch (error) {
-//     console.error('Error while fetching housebill', error);
-//     throw error;
-//   }
-// }
-
 async function updateFreightOrder(freightOrderId) {
   try {
     const logDataParams = {
