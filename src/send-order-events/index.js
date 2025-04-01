@@ -7,7 +7,6 @@ const uuid = require('uuid');
 const { getData, putLogItem } = require('../Shared/dynamo');
 const moment = require('moment-timezone');
 const {
-  fetchTackingData,
   fetchRefernceNo,
   getDocsFromWebsli,
   modifyTime,
@@ -270,7 +269,29 @@ async function getPayloadData(
   createShipmentData
 ) {
   try {
-    const trackingData = await fetchTackingData(fileNumber);
+    const trackingDataParams = {
+      TableName: process.env.LOGS_TABLE,
+      IndexName: 'FreightOrderId-Index',
+      KeyConditionExpression: 'FreightOrderId = :FreightOrderId',
+      FilterExpression: '#status = :status AND #process = :process',
+      ExpressionAttributeNames: {
+        '#status': 'Status',
+        '#process': 'Process',
+      },
+      ExpressionAttributeValues: {
+        ':FreightOrderId': get(dynamoData, 'FreightOrderId', ''),
+        ':status': get(CONSTANTS, 'statusVal.success', ''),
+        ':process': get(CONSTANTS, 'shipmentProcess.addTracking', ''),
+      },
+    };
+
+    const trackingData = await getData(trackingDataParams);
+    if (trackingData.length === 0) {
+      console.info(
+        `SKIPPING, There is no tracking data for this FO: ${get(dynamoData, 'FreightOrderId', '')}`
+      );
+      throw new Error(`SKIPPING, There is no tracking data for this FO: ${get(dynamoData, 'FreightOrderId', '')}`);
+    }
 
     const slocid = get(createShipmentData,'Slocid','');
     const clocid = get(createShipmentData,'Clocid','');
@@ -412,7 +433,7 @@ async function getPayloadData(
       carrier: {
         carrierLBNID: get(shipmentData, '[0].CarrierPartyLbnId', ''),
       },
-      technicalId: get(trackingData, 'Note', '').replace(/^technicalId /, ''),
+      technicalId: get(trackingData, '[0].TechnicalId', ''),
       orderId,
       trackId: housebill,
       creationDateTimeUTC,
