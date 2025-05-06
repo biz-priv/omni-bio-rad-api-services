@@ -31,6 +31,13 @@ module.exports.handler = async (event, context) => {
       );
     }
 
+    console.log('Items: ', get(eventBody, 'items', []))
+    console.log('businessDocumentReferences: ', get(eventBody, 'businessDocumentReferences', []))
+
+    // removing items and businessDocumentReferences from the payload to decrease the memory in dynamodb.
+    eventBody.items = []
+    eventBody.businessDocumentReferences = []
+
     const cstDate = moment().tz('America/Chicago');
     dynamoData.CSTDate = cstDate.format('YYYY-MM-DD');
     dynamoData.CSTDateTime = cstDate.format('YYYY-MM-DD HH:mm:ss SSS');
