@@ -29,6 +29,13 @@ module.exports.handler = async (event, context) => {
       );
     }
 
+    console.log('Items: ', get(eventBody, 'items', []))
+    console.log('businessDocumentReferences: ', get(eventBody, 'businessDocumentReferences', []))
+
+    // removing items and businessDocumentReferences from the payload to decrease the memory in dynamodb.
+    eventBody.items = []
+    eventBody.businessDocumentReferences = []
+
     // Set the time zone to CST
     const cstDate = moment().tz('America/Chicago');
     dynamoData.CSTDate = cstDate.format('YYYY-MM-DD');
