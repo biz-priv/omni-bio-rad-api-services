@@ -20,7 +20,6 @@ function:
     WT_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/wt/create-shipment/api.url}
     UPLOAD_DOCUMENT_API: ${ssm:/omni/${self:provider.stage}/bio-rad/wt/add-document/api.url}
     LBN_TOKEN_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint}
-    LBN_TOKEN_USERNAME: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/username}
-    LBN_TOKEN_PASSWORD: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/password}
-    LBN_TOKEN_AUTHORIZATION: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/authorization}
+    LBN_TOKEN_CLIENT_ID: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/client-id}
+    LBN_TOKEN_CLIENT_SECRET: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/client-secret}
     LBN_SEND_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-send-endpoint}

@@ -362,15 +362,17 @@ async function getServiceLevel(stages, source, destination) {
 
 async function getLbnToken() {
   try {
+    const tokenUrl = process.env.LBN_TOKEN_URL;
+
+    const params = new URLSearchParams();
+    params.append('grant_type', 'client_credentials');
+    params.append('client_id', process.env.LBN_TOKEN_CLIENT_ID);
+    params.append('client_secret', process.env.LBN_TOKEN_CLIENT_SECRET);
+
     const config = {
-      maxBodyLength: Infinity,
-      url: process.env.LBN_TOKEN_URL,
+      url: tokenUrl,
       method: 'post',
-      headers: {
-        Username: process.env.LBN_TOKEN_USERNAME,
-        Password: process.env.LBN_TOKEN_PASSWORD,
-        Authorization: process.env.LBN_TOKEN_AUTHORIZATION,
-      },
+      params
     };
 
     console.info('config: ', config);
