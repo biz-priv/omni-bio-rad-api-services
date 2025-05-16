@@ -22,9 +22,8 @@ function:
     LBN_SEND_ORDER_EVENTS_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-send-order-events-endpoint}
     GET_DOCUMENT_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/wt/get-document/api.url}
     LBN_TOKEN_URL: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint}
-    LBN_TOKEN_USERNAME: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/username}
-    LBN_TOKEN_PASSWORD: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/password}
-    LBN_TOKEN_AUTHORIZATION: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/authorization}
+    LBN_TOKEN_CLIENT_ID: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/client-id}
+    LBN_TOKEN_CLIENT_SECRET: ${ssm:/omni/${self:provider.stage}/bio-rad/lbn-token-endpoint/client-secret}
     APAR_FAILURE_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/apar-failure/ddb.tableName}
     SHIPMENT_MILESTONE_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/shipment-milestone/ddb.tableName}
     SHIPMENT_FILE_DATA_TABLE: ${ssm:/omni-wt-rt-updates/${self:provider.stage}/shipment-file-data/ddb.tableName}

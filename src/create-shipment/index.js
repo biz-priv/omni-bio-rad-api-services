@@ -29,8 +29,9 @@ module.exports.handler = async (event, context) => {
       );
     }
 
-    console.log('Items: ', get(eventBody, 'items', []))
-    console.log('businessDocumentReferences: ', get(eventBody, 'businessDocumentReferences', []))
+    const items = get(eventBody, 'items', []);
+    console.info('Items: ', get(eventBody, 'items', []))
+    console.info('businessDocumentReferences: ', get(eventBody, 'businessDocumentReferences', []))
 
     // removing items and businessDocumentReferences from the payload to decrease the memory in dynamodb.
     eventBody.items = []
@@ -116,7 +117,6 @@ module.exports.handler = async (event, context) => {
     }
 
     const transportationStages = get(eventBody, 'transportationStages', []);
-    const items = get(eventBody, 'items', []);
 
     // group the items to understand how many shipments were exist in the request.
     const groupedItems = await groupItems(items);
