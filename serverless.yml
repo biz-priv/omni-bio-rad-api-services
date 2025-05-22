@@ -8,6 +8,7 @@ provider:
   tags: ${self:custom.tags}
   stackTags: ${self:custom.tags}
   runtime: nodejs20.x
+  logRetentionInDays: ${ssm:/omni-common-utils-infra/${self:provider.stage}/cloudwatch-logs/retention-period-1}
   vpc:
     securityGroupIds:
       - ${ssm:/omni-dw/${self:provider.stage}/lambda/sgId}
